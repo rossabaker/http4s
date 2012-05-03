@@ -1,6 +1,6 @@
-package org.scalatra
+package com.github.http4s
 
 package object specs2 {
-  @deprecated("Use org.scalatra.test.specs2 instead", "2.0.0")
-  type ScalatraSpec = test.specs2.ScalatraSpec
+  @deprecated("Use com.github.http4s.test.specs2 instead", "2.0.0")
+  type Http4sSpec = test.specs2.Http4sSpec
 }
