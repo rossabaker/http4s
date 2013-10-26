@@ -6,7 +6,7 @@ import play.api.libs.iteratee._
 import java.net.InetAddress
 import scala.collection.JavaConverters._
 import concurrent.{ExecutionContext,Future}
-import javax.servlet.{ReadListener, ServletConfig, AsyncContext}
+import javax.servlet.{ServletInputStream, ReadListener, ServletConfig, AsyncContext}
 import org.http4s.Status.{InternalServerError, NotFound}
 import akka.util.ByteString
 
@@ -31,11 +31,10 @@ class Http4sServlet(route: Route, chunkSize: Int = DefaultChunkSize)
     servletRequest.getInputStream
     val request = toRequest(servletRequest)
     val ctx = servletRequest.startAsync()
-    handle(request, ctx)
-//    executor.execute {
+//    executor.execute { // This shouldn't be necessary anymore, the rest of the call just builds the iteratee, and sets the input callback. Nothing can block.
 //      new Runnable {
 //        def run() {
-//          handle(request, ctx)
+          handle(request, ctx)
 //        }
 //      }
 //    }
@@ -65,87 +64,7 @@ class Http4sServlet(route: Route, chunkSize: Int = DefaultChunkSize)
       })
     }
 
-    val is = servletRequest.getInputStream
-    is.setReadListener(
-      new ReadListener {
-        private val buffer = new Array[Byte](chunkSize)
-        private var fit: Future[Iteratee[HttpChunk, Unit]] = Future.successful(handler)
-
-        def onError(t: Throwable) {
-          fit.onComplete {
-            case Success(it) => it.run.onComplete(_ => ctx.complete())
-            case Failure(_)  => ctx.complete()
-          }
-        }
-
-        def onDataAvailable() {
-          var canceled = false
-          def go(): Unit = {
-            // TODO: isRead() is what triggers the reinsertion of this callback, at lest in Jetty
-            // http://git.eclipse.org/c/jetty/org.eclipse.jetty.project.git/tree/jetty-servlets/src/main/java/org/eclipse/jetty/servlets/DataRateLimitedServlet.java?h=jetty-9.1#n219
-            // line 286
-            if (!canceled && is.isReady()) {
-              val c = is.read(buffer, 0, chunkSize)
-              if (c != -1) {
-                val chunk = BodyChunk.fromArray(buffer, 0, c)
-                fit = fit.flatMap( it => it.fold {
-                  case Step.Cont(k) =>    Future.successful(k(Input.El(chunk)))
-                  case Step.Done(_, _) =>
-                    canceled = true
-                    ctx.complete()
-                    Future.successful(it)
-
-                  case Step.Error(e, _) =>
-                    canceled = true
-                    ctx.complete()
-                    log(s"Error during route: $e")
-                    Future.successful(it)
-                })
-                go()
-              }
-            }
-          }
-          go()
-        }
-
-        def onAllDataRead() {
-          fit.onComplete {
-            case Success(it) => it.run.onComplete( _ => ctx.complete() )
-            case Failure(_)  => ctx.complete()
-          }
-
-        }
-      }
-    )
-//    Enumerator.fromStream(servletRequest.getInputStream, chunkSize)
-//      .map[HttpChunk](BodyChunk(_))
-//      .run(handler)
-//      .onComplete(_ => ctx.complete() )
-//    var canceled = false
-//    Concurrent.unicast[HttpChunk]({
-//      channel =>
-//        val bytes = new Array[Byte](chunkSize)
-//        val is = servletRequest.getInputStream
-//
-//        @tailrec
-//        def push(): Unit = {
-//          if(is.isReady && !canceled) {
-//            val readBytes = is.read(bytes, 0, chunkSize)
-//            if (readBytes != -1) {
-//              channel.push(BodyChunk.fromArray(bytes, 0, readBytes))
-//              push()
-//            }
-//          }
-//        }
-//        is.setReadListener( new ReadListener {
-//          def onDataAvailable() { push() }
-//          def onError(t: Throwable) {}
-//          def onAllDataRead() { channel.eofAndEnd() }
-//        })
-//    },
-//    {canceled = true}
-//    ).run(handler)
-//      .onComplete{ _ => ctx.complete() }
+    servletRequest.getInputStream.setReadListener(new InputHandler(handler, ctx))
   }
 
   protected def toRequest(req: HttpServletRequest): RequestPrelude = {
@@ -170,6 +89,58 @@ class Http4sServlet(route: Route, chunkSize: Int = DefaultChunkSize)
       value <- req.getHeaders(name).asScala
     } yield HttpHeaders.RawHeader(name, value)
     HttpHeaders(headers.toSeq : _*)
+  }
+
+  private class InputHandler(handler: Iteratee[HttpChunk, Unit], ctx: AsyncContext) extends ReadListener {
+
+    private val is = ctx.getRequest.asInstanceOf[HttpServletRequest].getInputStream
+    private val buffer = new Array[Byte](chunkSize)
+    private var it = handler
+
+    def onError(t: Throwable) {
+      it.run.onComplete(_ => ctx.complete())
+    }
+
+    def onDataAvailable() {
+
+      // TODO: isRead() is what triggers the reinsertion of this callback, at lest in Jetty
+      // http://git.eclipse.org/c/jetty/org.eclipse.jetty.project.git/tree/jetty-servlets/src/main/java/org/eclipse/jetty/servlets/DataRateLimitedServlet.java?h=jetty-9.1#n219
+      // line 286
+      if (is.isReady()) {
+        def go(goit: Iteratee[HttpChunk, Unit], size: Int): Unit = {
+          goit.fold {
+            case Step.Cont(k) =>
+              val c = is.read(buffer, 0, size)  // this should always be larger than 0 if we got this far.
+              val chunk = BodyChunk.fromArray(buffer, 0, c)
+              val nit = k(Input.El(chunk))
+              val remaining = is.available()
+              if (remaining != 0) {
+                go(nit, if (chunkSize < remaining) chunkSize else remaining) // Limit to size or whatever is left
+              } else {
+                it = nit          // Set our iteratee in position for the next call from the server thread
+                onDataAvailable() // reset the callback
+              }
+              Future.successful(Unit)
+
+            case Step.Done(_, _) =>
+              ctx.complete()
+              Future.successful(Unit)
+
+            case Step.Error(e, _) =>
+              ctx.complete()
+              log(s"Error during route: $e")
+              Future.successful(Unit)
+          }
+        }
+        val remaining = is.available()
+        assert( remaining > 0)
+        go(it, if (chunkSize < remaining) chunkSize else remaining)
+      }
+    }
+
+    def onAllDataRead() {
+      it.run.onComplete( _ => ctx.complete())
+    }
   }
 }
 
