@@ -5,7 +5,7 @@ object Dependencies {
 
   val GrizzlyHttpServer = "org.glassfish.grizzly" % "grizzly-http-server" % "2.2.19"
 
-  private val jettyVersion = "8.1.8.v20121106"
+  private val jettyVersion = "9.1.0.RC0"  //8.1.8.v20121106"
   val JettyServer = "org.eclipse.jetty" % "jetty-server" % jettyVersion
   val JettyServlet = "org.eclipse.jetty" % "jetty-servlet" % jettyVersion
   val JettyWebSocket = "org.eclipse.jetty" % "jetty-websocket" % jettyVersion
@@ -24,7 +24,7 @@ object Dependencies {
 
   val ScalaloggingSlf4j = "com.typesafe" %% "scalalogging-slf4j" % "1.0.1"
 
-  val ServletApi = "javax.servlet" % "javax.servlet-api" % "3.0.1"
+  val ServletApi = "javax.servlet" % "javax.servlet-api" % "3.1.0"
 
   val Slf4j = "org.slf4j" % "slf4j-api" % "1.7.2"
 
