@@ -5,8 +5,8 @@ import javax.servlet.http.{HttpServletResponse, HttpServletRequest, HttpServlet}
 import play.api.libs.iteratee._
 import java.net.InetAddress
 import scala.collection.JavaConverters._
-import concurrent.{ExecutionContext,Future}
-import javax.servlet.{ServletInputStream, ReadListener, ServletConfig, AsyncContext}
+import scala.concurrent.{Promise, ExecutionContext, Future}
+import javax.servlet._
 import org.http4s.Status.{InternalServerError, NotFound}
 import akka.util.ByteString
 
@@ -17,6 +17,7 @@ import scala.annotation.tailrec
 import scala.util.{Failure, Success}
 import scala.util.Failure
 import scala.util.Success
+import org.http4s.TrailerChunk
 import org.http4s.TrailerChunk
 
 class Http4sServlet(route: Route, chunkSize: Int = DefaultChunkSize)
@@ -31,18 +32,13 @@ class Http4sServlet(route: Route, chunkSize: Int = DefaultChunkSize)
     servletRequest.getInputStream
     val request = toRequest(servletRequest)
     val ctx = servletRequest.startAsync()
-//    executor.execute { // This shouldn't be necessary anymore, the rest of the call just builds the iteratee, and sets the input callback. Nothing can block.
-//      new Runnable {
-//        def run() {
           handle(request, ctx)
-//        }
-//      }
-//    }
   }
 
   protected def handle(request: RequestPrelude, ctx: AsyncContext) {
     val servletRequest = ctx.getRequest.asInstanceOf[HttpServletRequest]
     val servletResponse = ctx.getResponse.asInstanceOf[HttpServletResponse]
+
     val parser = try {
       route.lift(request).getOrElse(Done(NotFound(request)))
     } catch { case t: Throwable => Done[HttpChunk, Responder](InternalServerError(t)) }
@@ -51,20 +47,82 @@ class Http4sServlet(route: Route, chunkSize: Int = DefaultChunkSize)
       for (header <- responder.prelude.headers)
         servletResponse.addHeader(header.name, header.value)
       import HttpEncodings.chunked
+
       val isChunked =
         responder.prelude.headers.get(HttpHeaders.TransferEncoding).map(_.coding.matches(chunked)).getOrElse(false)
 
-      responder.body.transform(Iteratee.foreach {
-        case BodyChunk(chunk) =>
-          val out = servletResponse.getOutputStream
-          out.write(chunk.toArray)
-          if(isChunked) out.flush()
-        case t: TrailerChunk =>
-          log("The servlet adapter does not implement trailers. Silently ignoring.")
-      })
+      val writer = new OutputWriter(servletResponse.getOutputStream)
+      writer.isChunked = isChunked
+
+//      responder.body.transform(Iteratee.foreach {
+//        case BodyChunk(chunk) =>
+//          val out = servletResponse.getOutputStream
+//          out.write(chunk.toArray)
+//          if(isChunked) out.flush()
+//        case t: TrailerChunk =>
+//          log("The servlet adapter does not implement trailers. Silently ignoring.")
+//      })
+      responder.body.transform(writer)
     }
 
     servletRequest.getInputStream.setReadListener(new InputHandler(handler, ctx))
+  }
+
+
+  private class OutputWriter(os: ServletOutputStream)
+                                  extends WriteListener with Iteratee[HttpChunk, Unit] {
+
+    var isChunked = false
+    private var isFirst = true
+    private var p: Promise[AnyRef] = null
+    private var f: (Step[HttpChunk, Unit] => Future[_]) = null
+
+    def fold[B](folder: (Step[HttpChunk, Unit]) => Future[B])(implicit ec: ExecutionContext): Future[B] = {
+      assert(f == null && p == null)
+
+      f = folder
+      p = Promise[AnyRef]
+
+      // set the callback
+      if (isFirst) {
+        isFirst = false
+        os.setWriteListener(this)
+      } else onWritePossible()
+
+      p.future.asInstanceOf[Future[B]]
+    }
+
+    def onError(t: Throwable) {
+      // Close down
+
+      logger.debug("Error in WriteHandler callback.", t)
+      if (p != null) p.failure(t)
+    }
+
+    def onWritePossible(): Unit = if (os.isReady) {
+      val ff = f
+      f = null
+      val result = ff(Step.Cont{
+        case Input.El(chunk:BodyChunk) =>
+          os.write(chunk.toArray)
+          if (isChunked) os.flush()
+          this
+
+        case c: TrailerChunk =>
+          logger.warn("Trailer chunks not supported. Dropped.")
+          this
+
+        case Input.Empty => this
+
+        case Input.EOF =>
+          Done((), Input.Empty)
+      })
+
+      // complete the future and get things ready for the next write
+      val pp = p
+      p = null
+      pp.completeWith(result.asInstanceOf[Future[AnyRef]])
+    }
   }
 
   protected def toRequest(req: HttpServletRequest): RequestPrelude = {
@@ -97,49 +155,37 @@ class Http4sServlet(route: Route, chunkSize: Int = DefaultChunkSize)
     private val buffer = new Array[Byte](chunkSize)
     private var it = handler
 
-    def onError(t: Throwable) {
-      it.run.onComplete(_ => ctx.complete())
-    }
+    def onError(t: Throwable) { it.run.onComplete(_ => ctx.complete()) }
+
+    def onAllDataRead() {it.run.onComplete( _ => ctx.complete()) }
 
     def onDataAvailable() {
 
-      // TODO: isRead() is what triggers the reinsertion of this callback, at lest in Jetty
+      // TODO: isRead() is what triggers the reinsertion of this callback, at lest in Jetty 9.1 RC1
       // http://git.eclipse.org/c/jetty/org.eclipse.jetty.project.git/tree/jetty-servlets/src/main/java/org/eclipse/jetty/servlets/DataRateLimitedServlet.java?h=jetty-9.1#n219
       // line 286
       if (is.isReady()) {
-        def go(goit: Iteratee[HttpChunk, Unit], size: Int): Unit = {
-          goit.fold {
-            case Step.Cont(k) =>
-              val c = is.read(buffer, 0, size)  // this should always be larger than 0 if we got this far.
-              val chunk = BodyChunk.fromArray(buffer, 0, c)
-              val nit = k(Input.El(chunk))
-              val remaining = is.available()
-              if (remaining != 0) {
-                go(nit, if (chunkSize < remaining) chunkSize else remaining) // Limit to size or whatever is left
-              } else {
-                it = nit          // Set our iteratee in position for the next call from the server thread
-                onDataAvailable() // reset the callback
-              }
-              Future.successful(Unit)
-
-            case Step.Done(_, _) =>
-              ctx.complete()
-              Future.successful(Unit)
-
-            case Step.Error(e, _) =>
-              ctx.complete()
-              log(s"Error during route: $e")
-              Future.successful(Unit)
-          }
-        }
         val remaining = is.available()
         assert( remaining > 0)
-        go(it, if (chunkSize < remaining) chunkSize else remaining)
-      }
-    }
+        val size = if (remaining > chunkSize) chunkSize else remaining
+        val c = is.read(buffer, 0, size)  // this should always be larger than 0 if we got this far.
+        val chunk = BodyChunk.fromArray(buffer, 0, c)
+        it.fold {
+          case Step.Cont(k) =>
+            it = k(Input.El(chunk))
+            onDataAvailable()
+            Future.successful(Unit)
 
-    def onAllDataRead() {
-      it.run.onComplete( _ => ctx.complete())
+          case Step.Done(_, _) =>
+            ctx.complete()
+            Future.successful(Unit)
+
+          case Step.Error(e, _) =>
+            ctx.complete()
+            logger.debug(s"Error during route: $e")
+            Future.successful(Unit)
+        }
+      }
     }
   }
 }
