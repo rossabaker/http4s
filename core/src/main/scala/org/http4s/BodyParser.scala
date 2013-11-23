@@ -11,6 +11,7 @@ import scalaz.syntax.id._
 import scalaz.concurrent.Task
 import scalaz.stream.Process._
 import scala.collection.mutable.ArrayBuffer
+import scala.util.control.ControlThrowable
 
 
 /** ParserFailHandler generates a response from a failed parser.
@@ -61,7 +62,7 @@ object BodyParser {
   //  implicit def bodyParserToResponderIteratee(bodyParser: BodyParser[Response]): Iteratee[Chunk, Response] =
   //    bodyParser(identity)
 
-  def text[A](req: Request, charset: CharacterSet = CharacterSet.`UTF-8`, limit: Int = DefaultMaxEntitySize) = {
+  def text[A](req: Request, charset: CharacterSet = CharacterSet.`UTF-8`) = {
       //  (f: String => Task[Response], fail: (Throwable, Task[Response]) => Task[Response] = (_, r) => r)
     
     val buff = new StringBuilder
@@ -72,7 +73,7 @@ object BodyParser {
       }
       b
     }.map(_.result())
-    new BodyParser(takeBytes(limit).pipe(p), req)
+    new BodyParser(p, req)
   }
 
 
@@ -83,17 +84,15 @@ object BodyParser {
    * TODO Not an ideal implementation.  Would be much better with an asynchronous XML parser, such as Aalto.
    *
    * @param charset the charset of the input
-   * @param limit the maximum size before an EntityTooLarge error is returned
    * @param parser the SAX parser to use to parse the XML
    * @return a request handler
    */
   def xml(req: Request,
           charset: CharacterSet = CharacterSet.`UTF-8`,
-          limit: Int = DefaultMaxEntitySize,
           parser: SAXParser = XML.parser) //,
           //onSaxException: SAXException => Response = { saxEx => /*saxEx.printStackTrace();*/ Status.BadRequest() })
   : BodyParser[Elem] = {
-    val p = comsumeUpTo(limit).flatMap{ chunk =>
+    val p = consume.flatMap{ chunk =>
       val source = new InputSource(chunk.asInputStream)
       source.setEncoding(charset.value)
       try emit(XML.loadXML(source, parser))
@@ -122,25 +121,11 @@ object BodyParser {
       }(oec)))
 */
 
-  private def takeBytes(n: Int): Process1[Chunk, Chunk] = {
-    def go(taken: Int, chunk: Chunk): Process1[Chunk, Chunk] = chunk match {
-      case c: BodyChunk =>
-        val sz = taken + c.length
-        if (sz > n) Halt(new Exception(s"Body Parse size exceeded: $sz > $n"))
-        else Emit(c::Nil, await(Get[Chunk])(go(sz, _)))
-
-      case c =>  Emit(c::Nil, await(Get[Chunk])(go(taken, _)))
-    }
-    await(Get[Chunk])(go(0,_))
-  }
-
-  def comsumeUpTo(n: Int): Process1[Chunk, BodyChunk] = {
-    val p = process1.fold[Chunk, BodyChunk](BodyChunk())((c1, c2) => c2 match {
+  def consume: Process1[Chunk, BodyChunk] =
+    process1.fold[Chunk, BodyChunk](BodyChunk())((c1, c2) => c2 match {
       case c2: BodyChunk => c1 ++ (c2)
       case _ => c1
     })
-    takeBytes(n) |> p
-  }
 
 /*
   val whileBodyChunk: Enumeratee[Chunk, BodyChunk] = new CheckDone[Chunk, BodyChunk] {
