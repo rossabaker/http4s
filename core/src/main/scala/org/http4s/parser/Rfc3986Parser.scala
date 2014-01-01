@@ -19,7 +19,7 @@ private[parser] trait Rfc3986Parser { this: Parser =>
     "//" ~ Authority ~ PathAbempty ~> {(auth: org.http4s.Uri.Authority, path: org.http4s.Uri.Path) => auth.some :: path :: HNil} |
       PathAbsolute ~> (None :: _ :: HNil) |
       PathRootless ~> (None :: _ :: HNil) |
-      PathEmpty ~> {(e: String) => None :: e :: HNil}
+      PathEmpty ~> {(e: org.http4s.Uri.Path) => None :: e :: HNil}
   }
 
   def UriReference = rule { Uri | RelativeRef }
@@ -35,7 +35,7 @@ private[parser] trait Rfc3986Parser { this: Parser =>
     "//" ~ Authority ~ PathAbempty ~> {(auth: org.http4s.Uri.Authority, path: org.http4s.Uri.Path) => auth.some :: path :: HNil} |
       PathAbsolute ~> (None :: _ :: HNil) |
       PathNoscheme ~> (None :: _ :: HNil) |
-      PathEmpty ~> {(e: String) => None :: e :: HNil}
+      PathEmpty ~> {(e: org.http4s.Uri.Path) => None :: e :: HNil}
   }
 
   def Scheme = rule {
@@ -84,21 +84,23 @@ private[parser] trait Rfc3986Parser { this: Parser =>
 
   def Path = rule { PathAbempty | PathAbsolute | PathNoscheme | PathRootless | PathEmpty }
 
-  def PathAbempty: Rule1[String] = rule { zeroOrMore("/" ~ Segment) ~> {(t: Seq[String]) => t.mkString("/", "/", "")} }
+  def PathAbempty: Rule1[org.http4s.Uri.Path] = rule { zeroOrMore("/" ~ Segment) ~> 
+    {(t: Seq[String]) => t.foldLeft(org.http4s.Uri.Path.empty) { _ :+ "/" :+ _ }}
+  }
 
-  def PathAbsolute: Rule1[String] = rule { "/" ~ SegmentNz ~ zeroOrMore("/" ~ Segment) ~> {(h: String, t: Seq[String]) =>
-    if (!t.isEmpty) "/" + h + t.mkString("/", "/", "")  else "/" + h
-  } }
+  def PathAbsolute: Rule1[org.http4s.Uri.Path] = rule { "/" ~ SegmentNz ~ zeroOrMore("/" ~ Segment) ~> 
+    {(h: String, t: Seq[String]) => t.foldLeft(org.http4s.Uri.Path("/", h)) { _ :+ "/" :+ _ }}
+  }
 
-  def PathNoscheme: Rule1[String] = rule { SegmentNzNc ~ zeroOrMore("/" ~ Segment) ~> {(h: String, t: Seq[String]) =>
-    if (!t.isEmpty) h + t.mkString("/", "/", "") else h
-  } }
+  def PathNoscheme: Rule1[org.http4s.Uri.Path] = rule { SegmentNzNc ~ zeroOrMore("/" ~ Segment) ~> 
+    {(h: String, t: Seq[String]) => t.foldLeft(org.http4s.Uri.Path(h)) { _ :+ "/" :+ _ }}
+  }
 
-  def PathRootless: Rule1[String] = rule { SegmentNz ~ zeroOrMore("/" ~ Segment) ~> {(h: String, t: Seq[String]) =>
-    if (!t.isEmpty) h + t.mkString("/", "/", "") else h
-  } }
+  def PathRootless: Rule1[org.http4s.Uri.Path] = rule { SegmentNz ~ zeroOrMore("/" ~ Segment) ~> 
+    {(h: String, t: Seq[String]) => t.foldLeft(org.http4s.Uri.Path(h)) { _ :+ "/" :+ _ }}
+  } 
 
-  def PathEmpty: Rule1[String] = rule { push("") }
+  def PathEmpty: Rule1[org.http4s.Uri.Path] = rule { push(org.http4s.Uri.Path.empty) }
 
   def Segment = rule { capture(zeroOrMore(Pchar)) ~> (decode _) }
 

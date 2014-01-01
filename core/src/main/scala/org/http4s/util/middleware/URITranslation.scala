@@ -22,7 +22,7 @@ object URITranslation {
 
         service(req
           .withAttribute(translateRootKey, troot)
-          .withPathInfo(req.pathInfo.substring(newPrefix.length)) )
+          .withPathInfo(req.pathInfo.drop(newPrefix.length)) )
 
       case req =>
         throw new MatchError(s"Missing Context: '$newPrefix' \nRequested: ${req.pathInfo}")

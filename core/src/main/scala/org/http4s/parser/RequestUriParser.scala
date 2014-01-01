@@ -12,10 +12,10 @@ private[http4s] class RequestUriParser(val input: ParserInput, val charset: Char
     Asterisk | 
     AbsoluteUri | 
     OriginForm | 
-    Authority ~> (auth => org.http4s.Uri(authority = Some(auth), path = ""))
+    Authority ~> (auth => org.http4s.Uri(authority = Some(auth), path = org.http4s.Uri.Path.empty))
   }
 
   def OriginForm = rule { PathAbsolute ~ optional(Query) ~> ((path, query) => org.http4s.Uri(path = path, query = query)) }
 
-  def Asterisk = rule { "*" ~ push(org.http4s.Uri(authority = Some(org.http4s.Uri.Authority(host = "*".ci)), path = "")) }
+  def Asterisk = rule { "*" ~ push(org.http4s.Uri(authority = Some(org.http4s.Uri.Authority(host = "*".ci)), path = org.http4s.Uri.Path.empty)) }
 }

@@ -6,6 +6,7 @@ import java.net.{URI, InetAddress}
 import org.http4s.util.CaseInsensitiveString
 import scalaz.concurrent.Task
 import org.http4s.Header.`Content-Type`
+import org.http4s.Uri.Path
 
 abstract class Message(headers: HeaderCollection, body: HttpBody, attributes: AttributeMap) {
   type Self <: Message
@@ -41,7 +42,7 @@ abstract class Message(headers: HeaderCollection, body: HttpBody, attributes: At
 
 case class Request(
   requestMethod: Method = Method.Get,
-  requestUri: Uri = Uri(path = "/"),
+  requestUri: Uri = Uri./,
   protocol: ServerProtocol = ServerProtocol.`HTTP/1.1`,
   headers: HeaderCollection = HeaderCollection.empty,
   body: HttpBody = HttpBody.empty,
@@ -60,7 +61,8 @@ case class Request(
     val caret = attributes.get(Request.Keys.PathInfoCaret).getOrElse(0)
     requestUri.path.splitAt(caret)
   }
-  def withPathInfo(pi: String) = copy(requestUri = requestUri.withPath(scriptName + pi))
+  def withPathInfo(pi: String) = copy(requestUri = requestUri.withPath(scriptName :+ pi))
+  def withPathInfo(path: Path) = copy(requestUri = requestUri.withPath(scriptName ))
 
   lazy val pathTranslated: Option[File] = attributes.get(Keys.PathTranslated)
 
