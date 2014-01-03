@@ -40,39 +40,28 @@ object Uri {
   type Host = CaseInsensitiveString
   type UserInfo = String
 
-  /**
-   * Inspired by scalaz.Cord.
-   */
-  sealed class Path private (private val self: FingerTree[Int, String]) {
-    def :+(s: String): Path = new Path(self :+ s)
+  sealed class Path private (private val self: String) {
+    def :+(s: String): Path = new Path(self + s)
 
     def ++(path: Path): Path = {
-      val concat = self <++> path.self
+      val concat = self + path.self
       new Path(concat)
     }
 
     def startsWith(s: String) = take(s.length).toString.startsWith(s)
 
     def splitAt(n: Int): (Path, Path) = {
-      val (l, mid, r) = self.split1(_ > n)
-      val (midl, midr) = mid.splitAt(n - l.measure)
-      (new Path(l :+ midl), new Path(midr +: r))
+      val (l, r) = self.splitAt(n)
+      (new Path(l), new Path(r))
     }
 
-    def take(n: Int): Path = splitAt(n)._1
+    def take(n: Int): Path = new Path(self.take(n))
 
-    def drop(n: Int): Path = splitAt(n)._2
+    def drop(n: Int): Path = new Path(self.drop(n))
 
-    override lazy val toString: String = {
-      import scalaz.syntax.foldable._
-      import Free._
-      val sb = new StringBuilder(self.measure)
-      val t = self.traverse_[Trampoline](x => Trampoline.delay(sb ++= x))
-      t.run
-      sb.toString
-    }
+    override lazy val toString: String = self
 
-    lazy val segments: Seq[String] = self.iterator.filterNot(_ == "/").toSeq
+    lazy val segments: Seq[String] = self.split('/')
   }
 
   object Path {
@@ -80,8 +69,7 @@ object Uri {
 
     def apply(segments: String*): Path = fromSegments(segments)
 
-    def fromSegments(segments: Seq[String]): Path =
-      new Path(segments.foldLeft(FingerTree.empty[Int, String](sizer))(_ :+ _))
+    def fromSegments(segments: Seq[String]): Path = new Path(segments.foldLeft(new StringBuilder)(_ append _).toString)
 
     val empty = fromSegments(Seq.empty)
     val / : Path = fromSegments(Seq("/"))
