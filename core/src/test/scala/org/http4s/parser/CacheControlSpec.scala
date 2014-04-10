@@ -3,15 +3,9 @@ package org.http4s.parser
 import org.scalatest.{Matchers, WordSpec}
 import org.http4s.Header.`Cache-Control`
 import scalaz.Validation
-import org.http4s.CacheDirective._
-import org.http4s.CacheDirective.`s-maxage`
-import org.http4s.CacheDirective.`max-stale`
-import org.http4s.CacheDirective.`min-fresh`
-import org.http4s.CacheDirective.`max-age`
-import org.http4s.CacheDirective.`private`
+import org.http4s.CacheDirective, CacheDirective._
 import scala.concurrent.duration._
 import org.http4s.util.string._
-import org.http4s.CacheDirective
 
 /**
  * @author Bryce Anderson
@@ -31,8 +25,8 @@ class CacheControlSpec extends WordSpec with Matchers with HeaderParserHelper[`C
 
   val others = List(`max-stale`(None),
                     `max-stale`(Some(2.seconds)),
-                    CacheDirective("Foo", None),
-                    CacheDirective("Foo", Some("Bar")))
+                    CacheDirective.fromString("Foo"),
+                    CacheDirective.fromString("Foo=Bar"))
 
 
   "CacheControl parser" should {
@@ -49,8 +43,8 @@ class CacheControlSpec extends WordSpec with Matchers with HeaderParserHelper[`C
       `max-stale`(None).value should equal("max-stale")
       `max-stale`(Some(2.seconds)).value should equal("max-stale=2")
 
-      CacheDirective("Foo", Some("Bar")).value should equal("Foo=\"Bar\"")
-      CacheDirective("Foo", None).value should equal("Foo")
+      CacheDirective.fromString("Foo=Bar").value should equal("Foo=\"Bar\"")
+      CacheDirective.fromString("Foo").value should equal("Foo")
     }
 
     "Parse cache headers" in {

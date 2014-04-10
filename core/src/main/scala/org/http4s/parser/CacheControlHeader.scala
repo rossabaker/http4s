@@ -16,7 +16,7 @@ private[parser] trait CacheControlHeader {
 
   def CACHE_CONTROL(value: String) = new CacheControlParser(value).parse
 
-  private class CacheControlParser(input: ParserInput) extends Http4sHeaderParser[`Cache-Control`](input) {
+  class CacheControlParser(input: ParserInput) extends Http4sHeaderParser[`Cache-Control`](input) {
 
     def entry: Rule1[`Cache-Control`] = rule {
       oneOrMore(CacheDirective).separatedBy(ListSep) ~ EOI ~> { xs: Seq[CacheDirective] =>
@@ -39,7 +39,8 @@ private[parser] trait CacheControlHeader {
       "s-maxage=" ~ DeltaSeconds ~> (s => `s-maxage`(s)) |
       "stale-if-error=" ~ DeltaSeconds ~> (s => `stale-if-error`(s)) |
       "stale-while-revalidate=" ~ DeltaSeconds ~> (s => `stale-while-revalidate`(s)) |
-      (Token ~ optional("=" ~ (Token | QuotedString)) ~> { (name: String, arg: Option[String]) => org.http4s.CacheDirective(name.ci, arg) })
+      (Token ~ optional("=" ~ (Token | QuotedString)) ~> { (name: String, arg: Option[String]) =>
+        new org.http4s.CacheDirective.CustomCacheDirective(name.ci, arg) })
     }
 
     def FieldNames: Rule1[Seq[String]] = rule { oneOrMore(QuotedString).separatedBy(ListSep) }
