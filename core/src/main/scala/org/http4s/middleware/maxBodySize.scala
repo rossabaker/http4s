@@ -23,6 +23,13 @@ object maxBodySize {
       }
 
     def isDefinedAt(req: Request): Boolean = service.isDefinedAt(req)
+
+    override def applyOrElse[A1 <: Request, B1 >: Task[Response]](req: A1, default: (A1) => B1): B1 = {
+      if (isTooLarge(req, maxSize))
+        if (service.isDefinedAt(req)) tooLargeResponse
+        else default(req)
+      else service.lift(limitBody(req, maxSize)).getOrElse(default(req))
+    }
   }
 
   val DefaultEntityTooLargeResponse = Status.RequestEntityTooLarge()
