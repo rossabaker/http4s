@@ -73,5 +73,3 @@ trait HttpBodyFunctions {
       .run.flatMap{_ => is.close(); f}
   }
 }
-
-case class EntityTooLarge(limit: Int) extends Exception with NoStackTrace
