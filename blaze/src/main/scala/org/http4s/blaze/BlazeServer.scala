@@ -50,7 +50,7 @@ object BlazeServer {
     }
 
     override def build: To = {
-      def stage(conn: SocketConnection): LeafBuilder[ByteBuffer] = new Http1Stage(aggregateService, Some(conn))
+      def stage(conn: SocketConnection): LeafBuilder[ByteBuffer] = new Http1ServerStage(aggregateService, Some(conn))
       val factory = new SocketServerChannelFactory(stage, 12, 8 * 1024)
       val channel = factory.bind(new InetSocketAddress(port))
       new BlazeServer(channel)

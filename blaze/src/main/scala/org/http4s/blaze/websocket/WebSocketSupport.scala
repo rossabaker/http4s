@@ -18,7 +18,7 @@ import scodec.bits.ByteVector
 /**
  * Created by Bryce Anderson on 3/30/14.
  */
-trait WebSocketSupport extends Http1Stage {
+trait WebSocketSupport extends Http1ServerStage {
   override protected def renderResponse(req: Request, resp: Response): Unit = {
     val ws = resp.attributes.get(org.http4s.websocket.websocketKey)
     logger.debug(s"Websocket key: $ws\nRequest headers: " + req.headers)
