@@ -7,7 +7,7 @@ import com.typesafe.scalalogging.Logging
 import org.http4s.Header.`Transfer-Encoding`
 import org.http4s.{Message, Headers, Header}
 import org.http4s.blaze.pipeline.TailStage
-import org.http4s.util.StringWriter
+import org.http4s.util.{Writer, StringWriter}
 
 import scala.concurrent.ExecutionContext
 import scalaz.concurrent.Task
@@ -18,13 +18,20 @@ import scalaz.concurrent.Task
 trait Http1Stage { self: Logging with TailStage[ByteBuffer] =>
 
   protected implicit def ec: ExecutionContext
-  
-  protected def encodeHeaders(headers: Headers, rr: StringWriter): Unit = {
-    headers.foreach( header => if (header.name != `Transfer-Encoding`.name) rr ~ header ~ '\r' ~ '\n' )
+
+  /** Encodes the headers into the Writer, except the Transfer-Encoding header which may be returned
+    * Note: this method is very niche but useful for both server and client. */
+  protected def encodeHeaders(headers: Headers, rr: Writer): Option[`Transfer-Encoding`] = {
+    var encoding: Option[`Transfer-Encoding`] = None
+    headers.foreach( header =>
+      if (header.name != `Transfer-Encoding`.name) rr ~ header ~ '\r' ~ '\n'
+      else encoding = `Transfer-Encoding`.matchHeader(header)
+    )
+    encoding
   }
 
   /** Check Connection header and add applicable headers to response */
-  protected def checkConnection(conn: Header.Connection, rr: StringWriter): Boolean = {
+  protected def checkCloseConnection(conn: Header.Connection, rr: StringWriter): Boolean = {
     if (conn.hasKeepAlive) {                          // connection, look to the request
       logger.trace("Found Keep-Alive header")
       false
@@ -56,7 +63,8 @@ trait Http1Stage { self: Logging with TailStage[ByteBuffer] =>
                closeOnFinish)
   }
 
-  /** Get the proper body encoder based on the message headers */
+  /** Get the proper body encoder based on the message headers,
+    * adding the appropriate Connection and Transfer-Encoding headers along the way */
   protected def getEncoder(connectionHeader: Option[Header.Connection],
                  bodyEncoding: Option[Header.`Transfer-Encoding`],
                  lengthHeader: Option[Header.`Content-Length`],

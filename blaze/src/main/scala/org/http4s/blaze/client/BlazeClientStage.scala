@@ -11,63 +11,52 @@ import pipeline.TailStage
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext
-import scalaz.\/
+import scalaz.{\/-, -\/, \/}
 import scalaz.concurrent.Task
 
 /**
  * Created by Bryce Anderson on 6/24/14.
  */
 
-class BlazeClientStage(implicit val ec: ExecutionContext)
-        extends Http1ClientParser with TailStage[ByteBuffer] with Http1Stage {
+class BlazeClientStage(closeOnFinish: Boolean)(implicit protected val ec: ExecutionContext)
+                      extends Http1ClientParser
+                      with TailStage[ByteBuffer]
+                      with Http1Stage
+                      with Http1ClientReceiver {
 
-  private type Callback = Throwable\/Response => Unit
-
-  private var status: Status = null
-  private var headers = new ListBuffer[Header]
+  protected type Callback = Throwable\/Response => Unit
 
   override def name: String = "BlazeClientStage"
 
-
   def runRequest(req: Request): Task[Response] = Task.async { cb =>
-    val reqline = makeRequestLine(req)
-    val h = writeHeaders(req.headers)
+    val rr = new StringWriter(512)
+    encodeRequestLine(req, rr)
+    encodeHeaders(req.headers, rr)
 
-    val writer =
+    val closeOnFinish = Header.Connection.from(req.headers)
+        .map(checkCloseConnection(_, rr))
+        .getOrElse(getHttpMinor(req) == 0)
 
-    writeBody(Vector(reqline, h), req.body, cb)
+    val enc = getChunkEncoder(req, closeOnFinish, rr)
+
+    enc.writeProcess(req.body).runAsync {
+      case \/-(_)    => receiveResponse(cb)
+      case e@ -\/(t) => cb(e)
+    }
   }
-
-  override protected def submitResponseLine(code: Int, reason: String,
-                                  scheme: String,
-                                  majorversion: Int, minorversion: Int): Unit = {
-    status = Status(code)
-  }
-
-  override protected def headerComplete(name: String, value: String): Boolean = {
-    headers += Header(name, value)
-    false
-  }
-
 
   ///////////////////////// Private helpers /////////////////////////
 
-  private def writeBody(prev: Seq[ByteBuffer], body: HttpBody, cb: Callback) {
-
-    ???
+  private def getHttpMinor(req: Request): Int = req.protocol match {
+    case HttpVersion(_, minor) => minor
+    case p => sys.error(s"Don't know the server protocol: $p")  // TODO: future proof?
   }
 
-  private def getWriter(req: Request, rr: StringWriter): ProcessWriter = {
-    val minor = req.protocol match {
-      case HttpVersion(_, minor) => minor
-      case p => sys.error(s"Don't know the server protocol: $p")
-    }
-    val closeOnFinish = true  // TODO: we might want a client that stays alive
-
-    getEncoder(req, rr, minor, closeOnFinish)
+  private def getChunkEncoder(req: Request, closeOnFinish: Boolean, rr: StringWriter): ProcessWriter = {
+    getEncoder(req, rr, getHttpMinor(req), closeOnFinish)
   }
 
-  private def makeRequestLine(req: Request): ByteBuffer = ???
+  private def encodeRequestLine(req: Request, writer: Writer): writer.type = ???
 }
 
 

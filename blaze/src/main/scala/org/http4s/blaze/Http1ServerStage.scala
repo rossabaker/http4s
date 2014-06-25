@@ -139,26 +139,23 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
     }
   }
 
-
-  // TODO: I think its time to break this down, its getting out of hand
   protected def renderResponse(req: Request, resp: Response) {
     val rr = new StringWriter(512)
     rr ~ req.protocol.value.toString ~ ' ' ~ resp.status.code ~ ' ' ~ resp.status.reason ~ '\r' ~ '\n'
-    encodeHeaders(resp.headers, rr)
 
+    val respTransferCoding = encodeHeaders(resp.headers, rr)    // kind of tricky method returns Option[Transfer-Encoding]
     val respConn =   Connection.from(resp.headers)
-    val respCoding = `Transfer-Encoding`.from(resp.headers)
 
     // Need to decide which encoder and if to close on finish
     val closeOnFinish = respConn.map(_.hasClose).orElse {
-        Header.Connection.from(req.headers).map(checkConnection(_, rr))
+        Header.Connection.from(req.headers).map(checkCloseConnection(_, rr))
       }.getOrElse(minor == 0)   // Finally, if nobody specifies, http 1.0 defaults to close
 
     // choose a body encoder. Will add a Transfer-Encoding header if necessary
     val lengthHeader = `Content-Length`.from(resp.headers)
 
     val bodyEncoder = {
-      if (resp.status.isInstanceOf[NoEntityResponseGenerator] && lengthHeader.isEmpty && respCoding.isEmpty) {
+      if (resp.status.isInstanceOf[NoEntityResponseGenerator] && lengthHeader.isEmpty && respTransferCoding.isEmpty) {
         // We don't have a body so we just get the headers
 
         // add KeepAlive to Http 1.0 responses if the header isn't already present
@@ -168,49 +165,8 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
         val b = ByteBuffer.wrap(rr.result().getBytes(StandardCharsets.US_ASCII))
         new BodylessWriter(b, this, closeOnFinish)
       }
-      else getEncoder(respConn, respCoding, lengthHeader, resp.trailerHeaders, rr, minor, closeOnFinish)
+      else getEncoder(respConn, respTransferCoding, lengthHeader, resp.trailerHeaders, rr, minor, closeOnFinish)
     }
-//      else lengthHeader match {
-//        case Some(h) if respCoding.isEmpty =>
-//          logger.trace("Using static encoder")
-//
-//          // add KeepAlive to Http 1.0 responses if the header isn't already present
-//          if (!closeOnFinish && minor == 0 && respConn.isEmpty) rr ~ "Connection:keep-alive\r\n\r\n"
-//          else rr ~ '\r' ~ '\n'
-//
-//          val b = ByteBuffer.wrap(rr.result().getBytes(StandardCharsets.US_ASCII))
-//          new StaticWriter(b, h.length, this)
-//
-//        case _ =>  // No Length designated for body or Transfer-Encoding included
-//          if (minor == 0) { // we are replying to a HTTP 1.0 request see if the length is reasonable
-//            if (closeOnFinish) {  // HTTP 1.0 uses a static encoder
-//              logger.trace("Using static encoder")
-//              rr ~ '\r' ~ '\n'
-//              val b = ByteBuffer.wrap(rr.result().getBytes(StandardCharsets.US_ASCII))
-//              new StaticWriter(b, -1, this)
-//            }
-//            else {  // HTTP 1.0, but request was Keep-Alive.
-//              logger.trace("Using static encoder without length")
-//              new CachingStaticWriter(rr, this) // will cache for a bit, then signal close if the body is long
-//            }
-//          }
-//          else {
-//            rr ~ "Transfer-Encoding: chunked\r\n\r\n"
-//            val b = ByteBuffer.wrap(rr.result().getBytes(StandardCharsets.US_ASCII))
-//            val trailer = resp.trailerHeaders
-//
-//            respCoding match { // HTTP >= 1.1 request without length. Will use a chunked encoder
-//              case Some(h) => // Signaling chunked may mean flush every chunk
-//                if (!h.hasChunked) logger.warn(s"Unknown transfer encoding: '${h.value}'. Defaulting to Chunked Encoding")
-//                new ChunkProcessWriter(b, this, trailer)
-//
-//              case None =>     // use a cached chunk encoder for HTTP/1.1 without length of transfer encoding
-//                logger.trace("Using Caching Chunk Encoder")
-//                new CachingChunkWriter(b, this, trailer)
-//            }
-//          }
-//      }
-//    }
 
     bodyEncoder.writeProcess(resp.body).runAsync {
       case \/-(_) =>
