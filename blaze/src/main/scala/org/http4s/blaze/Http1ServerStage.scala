@@ -36,7 +36,9 @@ import org.http4s.blaze.channel.SocketConnection
 
 class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
                 (implicit pool: ExecutorService = Strategy.DefaultExecutorService)
-              extends Http1ServerParser with TailStage[ByteBuffer] with Http1Stage {
+                  extends Http1ServerParser
+                  with TailStage[ByteBuffer]
+                  with Http1Stage[Request] {
 
   protected implicit def ec = trampoline
 
@@ -53,6 +55,11 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
   private val headers = new ListBuffer[Header]
 
   logger.trace(s"Http4sStage starting up")
+
+  // TODO: Its stupid that I have to have these methods
+  override protected def _contentComplete(): Boolean = contentComplete()
+
+  override protected def _parseContent(buffer: ByteBuffer): ByteBuffer = parseContent(buffer)
 
   // Will act as our loop
   override def stageStartup() {
@@ -87,7 +94,7 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
         runRequest(buff)
       }
       catch {
-        case t: ParserException => badRequest("Error parsing status or headers in requestLoop()", t, Request())
+        case t: ParserException => badMessage("Error parsing status or headers in requestLoop()", t, Request())
         case t: Throwable       => fatalError(t, "error in requestLoop()")
       }
 
@@ -95,7 +102,7 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
     case Failure(t)       => fatalError(t, "Error in requestLoop()")
   }
 
-  private def collectRequest(body: HttpBody): Request = {
+  protected def collectMessage(body: HttpBody): Request = {
     val h = Headers(headers.result())
     headers.clear()
 
@@ -108,7 +115,7 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
 
       case Failure(_: ParseError) =>
         val req = Request(requestUri = Uri(Some(this.uri.ci)), headers = h)
-        badRequest("Error parsing Uri", new BadRequest(s"Bad request URI: ${this.uri}"), req)
+        badMessage("Error parsing Uri", new BadRequest(s"Bad request URI: ${this.uri}"), req)
         null
 
       case Failure(t) =>
@@ -119,7 +126,7 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
 
   private def runRequest(buffer: ByteBuffer): Unit = {
     val body = collectBodyFromParser(buffer)
-    val req = collectRequest(body)
+    val req = collectMessage(body)
 
     // if we get a non-null response, process the route. Else, error has already been dealt with.
     if (req != null) {
@@ -182,55 +189,6 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
     }
   }
 
-  // TODO: what should be the behavior for determining if we have some body coming?
-  private def collectBodyFromParser(buffer: ByteBuffer): HttpBody = {
-    if (contentComplete()) return HttpBody.empty
-
-    @volatile var currentbuffer = buffer
-
-    // TODO: we need to work trailers into here somehow
-    val t = Task.async[ByteVector]{ cb =>
-      if (!contentComplete()) {
-
-        def go(): Unit = try {
-          val result = parseContent(currentbuffer)
-          if (result != null) cb(\/-(ByteVector(result))) // we have a chunk
-          else if (contentComplete()) cb(-\/(End))
-          else channelRead().onComplete {
-            case Success(b) =>       // Need more data...
-              currentbuffer = b
-              go()
-            case Failure(t) => cb(-\/(t))
-          }
-        } catch {
-          case t: ParserException =>
-            val req = collectRequest(halt)  // may be null, but thats ok.
-            badRequest("Error parsing request body", t, req)
-          case t: Throwable       => fatalError(t, "Error collecting body")
-        }
-        go()
-      } else { cb(-\/(End))}
-    }
-
-    val cleanup = Task.async[Unit](cb =>
-      drainBody(currentbuffer).onComplete {
-        case Success(_) => cb(\/-(()))
-        case Failure(t) =>
-          logger.warn("Error draining body", t)
-          cb(-\/(t))
-      }(directec))
-
-    repeatEval(t).onComplete(await(cleanup)(_ => halt))
-  }
-
-  private def drainBody(buffer: ByteBuffer): Future[Unit] = {
-    if (!contentComplete()) {
-      parseContent(buffer)
-      channelRead().flatMap(drainBody)
-    }
-    else Future.successful(())
-  }
-
   private def closeConnection() {
     logger.debug("closeConnection()")
     stageShutdown()
@@ -245,12 +203,6 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
 
   /////////////////// Error handling /////////////////////////////////////////
 
-  protected def fatalError(t: Throwable, msg: String = "") {
-    logger.error(s"Fatal Error: $msg", t)
-    stageShutdown()
-    sendOutboundCommand(Cmd.Error(t))
-  }
-
   private def parsingError(t: ParserException, message: String) {
     logger.debug(s"Parsing error: $message", t)
     stageShutdown()
@@ -258,7 +210,7 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
     sendOutboundCommand(Cmd.Disconnect)
   }
 
-  private def badRequest(msg: String, t: ParserException, req: Request) {
+  protected def badMessage(msg: String, t: ParserException, req: Request) {
     renderResponse(req, Response(Status.BadRequest).withHeaders(Connection("close".ci), `Content-Length`(0)))
     logger.debug(s"Bad Request: $msg", t)
   }

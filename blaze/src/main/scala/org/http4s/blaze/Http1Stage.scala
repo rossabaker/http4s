@@ -5,19 +5,46 @@ import java.nio.charset.StandardCharsets
 
 import com.typesafe.scalalogging.Logging
 import org.http4s.Header.`Transfer-Encoding`
-import org.http4s.{Message, Headers, Header}
-import org.http4s.blaze.pipeline.TailStage
+import org.http4s._
+import org.http4s.blaze.http.http_parser.BaseExceptions.ParserException
+import org.http4s.blaze.http.http_parser.BodyAndHeaderParser
+import org.http4s.blaze.pipeline.{Command, TailStage}
+import org.http4s.blaze.util.Execution._
 import org.http4s.util.{Writer, StringWriter}
+import scodec.bits.ByteVector
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{Future, ExecutionContext}
+import scala.util.{Failure, Success}
+import scalaz.stream.Process._
+import scalaz.{-\/, \/-}
 import scalaz.concurrent.Task
 
 /**
  * Created by Bryce Anderson on 6/24/14.
  */
-trait Http1Stage { self: Logging with TailStage[ByteBuffer] =>
+trait Http1Stage[M <: Message] { self: Logging with TailStage[ByteBuffer] =>
 
   protected implicit def ec: ExecutionContext
+
+  /** Collects the message state from the Stage
+    * '''WARNING:''' This method may return __null__ if the stage aborted and the goal is to cancel */
+  protected def collectMessage(body: HttpBody): M
+
+  /** Called when a fatal error has occurred
+    * The method logs an error and shuts down the stage, sending the error outbound
+    * @param t
+    * @param msg
+    */
+  protected def fatalError(t: Throwable, msg: String = "") {
+    logger.error(s"Fatal Error: $msg", t)
+    stageShutdown()
+    sendOutboundCommand(Command.Error(t))
+  }
+
+  // TODO: Its stupid that I have to have these methods
+  protected def _contentComplete(): Boolean
+
+  protected def _parseContent(buffer: ByteBuffer): ByteBuffer
 
   /** Encodes the headers into the Writer, except the Transfer-Encoding header which may be returned
     * Note: this method is very niche but useful for both server and client. */
@@ -111,4 +138,54 @@ trait Http1Stage { self: Logging with TailStage[ByteBuffer] =>
       }
   }
 
+  protected def collectBodyFromParser(buffer: ByteBuffer): HttpBody = {
+    if (_contentComplete()) return HttpBody.empty
+
+    @volatile var currentbuffer = buffer
+
+    // TODO: we need to work trailers into here somehow
+    val t = Task.async[ByteVector]{ cb =>
+      if (!_contentComplete()) {
+
+        def go(): Unit = try {
+          val result = _parseContent(currentbuffer)
+          if (result != null) cb(\/-(ByteVector(result))) // we have a chunk
+          else if (_contentComplete()) cb(-\/(End))
+          else channelRead().onComplete {
+            case Success(b) =>       // Need more data...
+              currentbuffer = b
+              go()
+            case Failure(t) => cb(-\/(t))
+          }
+        } catch {
+          case t: ParserException =>
+            fatalError(t, "Error parsing request body")
+            cb(-\/(t))
+
+          case t: Throwable =>
+            fatalError(t, "Error collecting body")
+            cb(-\/(t))
+        }
+        go()
+      } else { cb(-\/(End))}
+    }
+
+    val cleanup = Task.async[Unit](cb =>
+      drainBody(currentbuffer).onComplete {
+        case Success(_) => cb(\/-(()))
+        case Failure(t) =>
+          logger.warn("Error draining body", t)
+          cb(-\/(t))
+      }(directec))
+
+    repeatEval(t).onComplete(await(cleanup)(_ => halt))
+  }
+
+  private def drainBody(buffer: ByteBuffer): Future[Unit] = {
+    if (!_contentComplete()) {
+      _parseContent(buffer)
+      channelRead().flatMap(drainBody)
+    }
+    else Future.successful(())
+  }
 }
