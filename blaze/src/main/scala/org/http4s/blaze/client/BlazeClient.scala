@@ -54,11 +54,10 @@ abstract class BlazeClient extends Client {
       body = ???)
     // Shutdown our connection
     f.onComplete( _ => client.sendOutboundCommand(Command.Disconnect))
-
     f
   }
 
-  private def buildPipeline(req: Request): Future[HttpClientStage] = {
+  private def buildPipeline(req: Request): Future[BlazeClientStage] = {
 
     val isHttps = req.requestUri.scheme.map { ci =>
       if (ci == "https") true
@@ -70,7 +69,7 @@ abstract class BlazeClient extends Client {
     val fhead = connectionManager.connect(new InetSocketAddress(auth.host.toString, port), bufferSize)
 
     fhead.map { head =>
-      val t = new HttpClientStage()
+      val t = new BlazeClientStage()
 
       if (isHttps) {
         val eng = sslContext.createSSLEngine()
