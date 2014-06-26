@@ -24,33 +24,36 @@ import scalaz.concurrent.Task
 class BlazeClientStage(protected val closeOnFinish: Boolean,
                        protected val timeout: Duration = 60.seconds)
                       (implicit protected val ec: ExecutionContext)
-                      extends Http1ClientReceiver
-                      with TailStage[ByteBuffer]
-                      with Http1Stage[Response] {
+                      extends Http1ClientReceiver with Http1Stage[Response] {
 
   protected type Callback = Throwable\/Response => Unit
 
   override def name: String = "BlazeClientStage"
 
   // TODO: Its stupid that I have to have these methods
-  override protected def _contentComplete(): Boolean = contentComplete()
+  override protected def parserContentComplete(): Boolean = contentComplete()
 
-  override protected def _parseContent(buffer: ByteBuffer): ByteBuffer = parseContent(buffer)
+  override protected def doParseContent(buffer: ByteBuffer): ByteBuffer = parseContent(buffer)
 
   def runRequest(req: Request): Task[Response] = Task.async { cb =>
-    val rr = new StringWriter(512)
-    encodeRequestLine(req, rr)
-    encodeHeaders(req.headers, rr)
+    try {
+      val rr = new StringWriter(512)
+      encodeRequestLine(req, rr)
+      encodeHeaders(req.headers, rr)
 
-    val closeOnFinish = Header.Connection.from(req.headers)
-        .map(checkCloseConnection(_, rr))
-        .getOrElse(getHttpMinor(req) == 0)
+      val closeHeader = closeOnFinish || Header.Connection.from(req.headers)
+                                           .map(checkCloseConnection(_, rr))
+                                           .getOrElse(getHttpMinor(req) == 0)
 
-    val enc = getChunkEncoder(req, closeOnFinish, rr)
+      val enc = getChunkEncoder(req, closeHeader, rr)
 
-    enc.writeProcess(req.body).runAsync {
-      case \/-(_)    => receiveResponse(cb)
-      case e@ -\/(t) => cb(e)
+      enc.writeProcess(req.body).runAsync {
+        case \/-(_)    => receiveResponse(cb)
+        case e@ -\/(t) => cb(e)
+      }
+    } catch { case t: Throwable =>
+      logger.error("Error during request submission", t)
+      cb(-\/(t))
     }
   }
 
@@ -63,8 +66,8 @@ class BlazeClientStage(protected val closeOnFinish: Boolean,
     case p => sys.error(s"Don't know the server protocol: $p")
   }
 
-  private def getChunkEncoder(req: Request, closeOnFinish: Boolean, rr: StringWriter): ProcessWriter = {
-    getEncoder(req, rr, getHttpMinor(req), closeOnFinish)
+  private def getChunkEncoder(req: Request, closeHeader: Boolean, rr: StringWriter): ProcessWriter = {
+    getEncoder(req, rr, getHttpMinor(req), closeHeader)
   }
 
   private def encodeRequestLine(req: Request, writer: Writer): writer.type = {
@@ -80,7 +83,7 @@ class BlazeClientStage(protected val closeOnFinish: Boolean,
         case None =>
       }
       writer
-    } else sys.error("Request must have a host!") // TODO: do we want to do this by exception?
+    } else sys.error("Request URI must have a host.") // TODO: do we want to do this by exception?
   }
 }
 

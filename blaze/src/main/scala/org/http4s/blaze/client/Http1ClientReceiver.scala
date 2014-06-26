@@ -5,7 +5,7 @@ import java.nio.ByteBuffer
 import org.http4s._
 import org.http4s.blaze.Http1Stage
 import org.http4s.blaze.http.http_parser.Http1ClientParser
-import org.http4s.blaze.pipeline.Command
+import org.http4s.blaze.pipeline.{TailStage, Command}
 import org.http4s.util.CaseInsensitiveString
 
 import scala.collection.mutable.ListBuffer
@@ -20,7 +20,8 @@ import scalaz.stream.Process
  */
 
 
-abstract class Http1ClientReceiver extends Http1ClientParser { self: BlazeClientStage with Http1Stage[Response] =>
+abstract class Http1ClientReceiver extends Http1ClientParser
+                                      with TailStage[ByteBuffer] { self: BlazeClientStage =>
 
   private val _headers = new ListBuffer[Header]
   private var _status: Status = null
@@ -63,7 +64,7 @@ abstract class Http1ClientReceiver extends Http1ClientParser { self: BlazeClient
     }
   }
 
-  private def requestLoop(buffer: ByteBuffer, cb: Callback): Unit = {
+  private def requestLoop(buffer: ByteBuffer, cb: Callback): Unit = try {
     if (!responseLineComplete() && !parseResponseLine(buffer)) {
       readAndParse(cb, "Response Line Parsing")
       return
@@ -83,5 +84,9 @@ abstract class Http1ClientReceiver extends Http1ClientParser { self: BlazeClient
     }))
 
     cb(\/-(collectMessage(body)))
+  } catch {
+    case t: Throwable =>
+      logger.error("Error during client request decode loop", t)
+      cb(-\/(t))
   }
 }

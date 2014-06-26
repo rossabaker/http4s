@@ -42,9 +42,9 @@ trait Http1Stage[M <: Message] { self: Logging with TailStage[ByteBuffer] =>
   }
 
   // TODO: Its stupid that I have to have these methods
-  protected def _contentComplete(): Boolean
+  protected def parserContentComplete(): Boolean
 
-  protected def _parseContent(buffer: ByteBuffer): ByteBuffer
+  protected def doParseContent(buffer: ByteBuffer): ByteBuffer
 
   /** Encodes the headers into the Writer, except the Transfer-Encoding header which may be returned
     * Note: this method is very niche but useful for both server and client. */
@@ -139,18 +139,18 @@ trait Http1Stage[M <: Message] { self: Logging with TailStage[ByteBuffer] =>
   }
 
   protected def collectBodyFromParser(buffer: ByteBuffer): HttpBody = {
-    if (_contentComplete()) return HttpBody.empty
+    if (parserContentComplete()) return HttpBody.empty
 
     @volatile var currentbuffer = buffer
 
     // TODO: we need to work trailers into here somehow
     val t = Task.async[ByteVector]{ cb =>
-      if (!_contentComplete()) {
+      if (!parserContentComplete()) {
 
         def go(): Unit = try {
-          val result = _parseContent(currentbuffer)
+          val result = doParseContent(currentbuffer)
           if (result != null) cb(\/-(ByteVector(result))) // we have a chunk
-          else if (_contentComplete()) cb(-\/(End))
+          else if (parserContentComplete()) cb(-\/(End))
           else channelRead().onComplete {
             case Success(b) =>       // Need more data...
               currentbuffer = b
@@ -182,8 +182,8 @@ trait Http1Stage[M <: Message] { self: Logging with TailStage[ByteBuffer] =>
   }
 
   private def drainBody(buffer: ByteBuffer): Future[Unit] = {
-    if (!_contentComplete()) {
-      _parseContent(buffer)
+    if (!parserContentComplete()) {
+      doParseContent(buffer)
       channelRead().flatMap(drainBody)
     }
     else Future.successful(())

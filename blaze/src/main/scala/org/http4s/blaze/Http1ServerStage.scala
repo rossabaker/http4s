@@ -57,9 +57,9 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
   logger.trace(s"Http4sStage starting up")
 
   // TODO: Its stupid that I have to have these methods
-  override protected def _contentComplete(): Boolean = contentComplete()
+  override protected def parserContentComplete(): Boolean = contentComplete()
 
-  override protected def _parseContent(buffer: ByteBuffer): ByteBuffer = parseContent(buffer)
+  override protected def doParseContent(buffer: ByteBuffer): ByteBuffer = parseContent(buffer)
 
   // Will act as our loop
   override def stageStartup() {
