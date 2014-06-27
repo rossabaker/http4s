@@ -9,12 +9,13 @@ import scalaz.concurrent.Task
 
 
 trait Client {
-  def request(req: Request): Task[Response] = request(req::Nil).map{ resp =>
-    if (resp.isEmpty) sys.error(s"Didn't receive a response for request $req")
-    else resp.head
-  }
 
-  def request(urls: Seq[Request]): Task[Seq[Response]]
+  /** Make a single request
+    * @param req [[Request]] containing the headers, URI, etc.
+    * @return Task which will generate the Response
+    */
+  def request(req: Request): Task[Response]
 
+  /** Shutdown this client, closing any open connections and freeing resources */
   def shutdown(): Task[Unit]
 }

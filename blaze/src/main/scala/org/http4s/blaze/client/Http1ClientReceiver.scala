@@ -83,6 +83,7 @@ abstract class Http1ClientReceiver extends Http1ClientParser
       else reset()
     }))
 
+    // TODO: we need to detect if the other side has signaled the connection will close.
     cb(\/-(collectMessage(body)))
   } catch {
     case t: Throwable =>

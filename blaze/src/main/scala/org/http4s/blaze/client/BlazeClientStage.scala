@@ -41,6 +41,8 @@ class BlazeClientStage(protected val closeOnFinish: Boolean,
       encodeRequestLine(req, rr)
       encodeHeaders(req.headers, rr)
 
+      logger.error("Status line and headers ---------------\n" + rr.result() + "\n------------------------")
+
       val closeHeader = closeOnFinish || Header.Connection.from(req.headers)
                                            .map(checkCloseConnection(_, rr))
                                            .getOrElse(getHttpMinor(req) == 0)

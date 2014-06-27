@@ -9,8 +9,6 @@ import scalaz.stream.Process.halt
  */
 class Http4sHttp1ClientStageSpec extends WordSpec with Matchers {
 
-  import org.http4s.Http4s._
-
   def makeRequest(req: Request, close: Boolean = true): Response = {
     BlazeClient.request(req).run
   }
@@ -20,12 +18,20 @@ class Http4sHttp1ClientStageSpec extends WordSpec with Matchers {
   }
 
   "Http1 Client" should {
-    "Make simple requests" in {
+    "Make simple http requests" in {
       val req = Request(requestUri = Uri.fromString("http://www.google.com/").get)
       val resp = makeRequest(req)
       println(resp.copy(body = halt))
-      println(gatherBody(resp.body))
-      true should equal(true)
+      gatherBody(resp.body)
+      resp.status.code should equal(200)
+    }
+
+    "Make simple https requests" in {
+      val req = Request(requestUri = Uri.fromString("https://www.google.com/").get)
+      val resp = makeRequest(req)
+      println(resp.copy(body = halt))
+      println("Body -------------------------\n" + gatherBody(resp.body) + "\n--------------------------")
+      resp.status.code should equal(200)
     }
 
   }
