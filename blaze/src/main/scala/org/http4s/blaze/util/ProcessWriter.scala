@@ -1,15 +1,13 @@
-package org.http4s
-package blaze
+package org.http4s.blaze.util
 
-import scalaz.stream.Process
-import Process._
-
-import scalaz.concurrent.Task
-import scalaz.{\/, -\/, \/-}
+import scodec.bits.ByteVector
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Try, Failure, Success}
-import scodec.bits.ByteVector
+import scala.util.{Failure, Success, Try}
+import scalaz.concurrent.Task
+import scalaz.stream.Process
+import scalaz.stream.Process._
+import scalaz.{-\/, \/, \/-}
 
 /**
  * @author Bryce Anderson

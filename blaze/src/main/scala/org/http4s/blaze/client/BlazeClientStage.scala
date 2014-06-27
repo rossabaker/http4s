@@ -8,6 +8,7 @@ import http.http_parser.Http1ClientParser
 import org.http4s.Header.Host
 import org.http4s.ServerProtocol.HttpVersion
 import org.http4s.blaze.http.http_parser.BaseExceptions.ParserException
+import org.http4s.blaze.util.ProcessWriter
 import org.http4s.util.{Writer, StringWriter}
 import org.http4s.blaze.pipeline.{Command, TailStage}
 
@@ -41,13 +42,13 @@ class BlazeClientStage(protected val closeOnFinish: Boolean,
       encodeRequestLine(req, rr)
       encodeHeaders(req.headers, rr)
 
-      logger.error("Status line and headers ---------------\n" + rr.result() + "\n------------------------")
-
       val closeHeader = closeOnFinish || Header.Connection.from(req.headers)
                                            .map(checkCloseConnection(_, rr))
                                            .getOrElse(getHttpMinor(req) == 0)
 
       val enc = getChunkEncoder(req, closeHeader, rr)
+
+      //println(rr.result().replace("\r\n", "\\r\\n\n"))
 
       enc.writeProcess(req.body).runAsync {
         case \/-(_)    => receiveResponse(cb)

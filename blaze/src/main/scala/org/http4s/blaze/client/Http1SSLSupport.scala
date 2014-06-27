@@ -4,12 +4,13 @@ package blaze.client
 import org.http4s.util.CaseInsensitiveString._
 
 import java.net.InetSocketAddress
-import java.security.KeyStore
-import javax.net.ssl.{SSLContext, KeyManagerFactory}
+import java.security.{NoSuchAlgorithmException, SecureRandom}
+
+import java.security.cert.X509Certificate
+import javax.net.ssl.{X509TrustManager, SSLContext}
 
 import org.http4s.blaze.pipeline.LeafBuilder
 import org.http4s.blaze.pipeline.stages.SSLStage
-import org.http4s.blaze.util.BogusKeystore
 
 import scala.concurrent.ExecutionContext
 
@@ -21,24 +22,27 @@ trait Http1SSLSupport extends Http1Support {
 
   implicit protected def ec: ExecutionContext
 
-  private lazy val _clientSSLContext = {
-    val ksStream = BogusKeystore.asInputStream()
-    val ks = KeyStore.getInstance("JKS")
-    ks.load(ksStream, BogusKeystore.getKeyStorePassword)
-
-    val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
-    kmf.init(ks, BogusKeystore.getCertificatePassword)
-
-    val context = SSLContext.getInstance("SSL")
-
-    context.init(kmf.getKeyManagers(), null, null)
-    context
+  private class DefaultTrustManager extends X509TrustManager {
+    def getAcceptedIssuers(): Array[X509Certificate] =  new Array[java.security.cert.X509Certificate](0)
+    def checkClientTrusted(certs: Array[X509Certificate], authType: String) { }
+    def checkServerTrusted(certs: Array[X509Certificate], authType: String) { }
   }
+
+  private def defaultTrustManagerSSLContext(): SSLContext = try {
+    val sslContext = SSLContext.getInstance("TLS")
+    sslContext.init(null, Array(new DefaultTrustManager()), new SecureRandom())
+    sslContext
+  } catch {
+    case e: NoSuchAlgorithmException => throw new ExceptionInInitializerError(e)
+    case e: ExceptionInInitializerError => throw new ExceptionInInitializerError(e)
+  }
+
+  protected lazy val sslContext = defaultTrustManagerSSLContext()
 
   override protected def buildPipeline(req: Request, closeOnFinish: Boolean): PipelineResult = {
     req.requestUri.scheme match {
       case Some(ci) if ci == "https".ci && req.requestUri.authority.isDefined =>
-        val eng = _clientSSLContext.createSSLEngine()
+        val eng = sslContext.createSSLEngine()
         eng.setUseClientMode(true)
 
         val auth = req.requestUri.authority.get

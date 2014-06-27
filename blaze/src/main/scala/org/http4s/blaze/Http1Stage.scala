@@ -10,6 +10,7 @@ import org.http4s.blaze.http.http_parser.BaseExceptions.ParserException
 import org.http4s.blaze.http.http_parser.BodyAndHeaderParser
 import org.http4s.blaze.pipeline.{Command, TailStage}
 import org.http4s.blaze.util.Execution._
+import org.http4s.blaze.util.{ChunkProcessWriter, CachingStaticWriter, CachingChunkWriter, ProcessWriter}
 import org.http4s.util.{Writer, StringWriter}
 import scodec.bits.ByteVector
 
@@ -123,17 +124,14 @@ trait Http1Stage[M <: Message] { self: Logging with TailStage[ByteBuffer] =>
         }
       }
       else {
-        rr ~ "Transfer-Encoding: chunked\r\n\r\n"
-        val b = ByteBuffer.wrap(rr.result().getBytes(StandardCharsets.US_ASCII))
-
         bodyEncoding match { // HTTP >= 1.1 request without length. Will use a chunked encoder
-          case Some(h) => // Signaling chunked may mean flush every chunk
+          case Some(h) => // Signaling chunked means flush every chunk
             if (!h.hasChunked) logger.warn(s"Unknown transfer encoding: '${h.value}'. Defaulting to Chunked Encoding")
-            new ChunkProcessWriter(b, this, trailer)
+            new ChunkProcessWriter(rr, this, trailer)
 
           case None =>     // use a cached chunk encoder for HTTP/1.1 without length of transfer encoding
             logger.trace("Using Caching Chunk Encoder")
-            new CachingChunkWriter(b, this, trailer)
+            new CachingChunkWriter(rr, this, trailer)
         }
       }
   }

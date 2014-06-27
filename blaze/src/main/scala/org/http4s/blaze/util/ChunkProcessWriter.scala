@@ -1,23 +1,25 @@
-package org.http4s
-package blaze
+package org.http4s.blaze.util
 
 import java.nio.ByteBuffer
-import pipeline.TailStage
-import scala.concurrent.{Promise, Future, ExecutionContext}
-import scalaz.concurrent.Task
 import java.nio.charset.StandardCharsets
+
+import org.http4s.Headers
+import org.http4s.blaze.pipeline.TailStage
 import org.http4s.util.StringWriter
 import scodec.bits.ByteVector
-import scalaz.{\/-, -\/}
+
+import scala.concurrent.{ExecutionContext, Future, Promise}
+import scalaz.concurrent.Task
+import scalaz.{-\/, \/-}
 
 /**
  * @author Bryce Anderson
  *         Created on 1/10/14
  */
-class ChunkProcessWriter(private var headers: ByteBuffer, pipe: TailStage[ByteBuffer], trailer: Task[Headers])
+class ChunkProcessWriter(private var headers: StringWriter, pipe: TailStage[ByteBuffer], trailer: Task[Headers])
                               (implicit val ec: ExecutionContext) extends ProcessWriter {
 
-  import ChunkProcessWriter._
+  import org.http4s.blaze.util.ChunkProcessWriter._
 
   private def CRLF = ByteBuffer.wrap(CRLFBytes).asReadOnlyBuffer()
 
@@ -43,13 +45,23 @@ class ChunkProcessWriter(private var headers: ByteBuffer, pipe: TailStage[ByteBu
       promise.future
     }
 
-    if (headers != null) {
+    if (headers != null) {  // This is the first write, so we can add a body length instead of chunking
       val h = headers
       headers = null
-      val chunks = if (chunk.nonEmpty) h::encodeChunk(chunk, Nil)
-                   else h::Nil
 
-      pipe.channelWrite(chunks).flatMap { _ => writeTrailer }
+      if (chunk.nonEmpty) {
+        val body = chunk.toByteBuffer
+        h ~ s"Content-Length: ${body.remaining()}\r\n\r\n"
+        
+        // Trailers are optional, so dropping because we have no body.
+        val hbuff = ByteBuffer.wrap(h.result().getBytes(StandardCharsets.US_ASCII))
+        pipe.channelWrite(hbuff::body::Nil)
+      }
+      else {
+        h ~ s"Content-Length: 0\r\n\r\n"
+        val hbuff = ByteBuffer.wrap(h.result().getBytes(StandardCharsets.US_ASCII))
+        pipe.channelWrite(hbuff)
+      }
     } else {
       if (chunk.nonEmpty) writeBodyChunk(chunk, true).flatMap { _ => writeTrailer }
       else writeTrailer
@@ -67,8 +79,10 @@ class ChunkProcessWriter(private var headers: ByteBuffer, pipe: TailStage[ByteBu
     val list = writeLength(chunk.length)::chunk.toByteBuffer::CRLF::last
     if (headers != null) {
       val i = headers
+      i ~ "Transfer-Encoding: chunked\r\n\r\n"
+      val b = ByteBuffer.wrap(i.result().getBytes(StandardCharsets.US_ASCII))
       headers = null
-      i::list
+      b::list
     } else list
   }
 }

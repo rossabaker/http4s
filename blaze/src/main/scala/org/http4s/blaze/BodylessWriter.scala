@@ -1,6 +1,7 @@
 package org.http4s
 package blaze
 
+import org.http4s.blaze.util.ProcessWriter
 import scodec.bits.ByteVector
 import scala.concurrent.{ExecutionContext, Future}
 import scalaz.stream.Process

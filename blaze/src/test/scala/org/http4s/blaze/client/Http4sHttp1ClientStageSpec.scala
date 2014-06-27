@@ -21,7 +21,7 @@ class Http4sHttp1ClientStageSpec extends WordSpec with Matchers {
     "Make simple http requests" in {
       val req = Request(requestUri = Uri.fromString("http://www.google.com/").get)
       val resp = makeRequest(req)
-      println(resp.copy(body = halt))
+//      println(resp.copy(body = halt))
       gatherBody(resp.body)
       resp.status.code should equal(200)
     }
@@ -29,8 +29,8 @@ class Http4sHttp1ClientStageSpec extends WordSpec with Matchers {
     "Make simple https requests" in {
       val req = Request(requestUri = Uri.fromString("https://www.google.com/").get)
       val resp = makeRequest(req)
-      println(resp.copy(body = halt))
-      println("Body -------------------------\n" + gatherBody(resp.body) + "\n--------------------------")
+//      println(resp.copy(body = halt))
+//      println("Body -------------------------\n" + gatherBody(resp.body) + "\n--------------------------")
       resp.status.code should equal(200)
     }
 

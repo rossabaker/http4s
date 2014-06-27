@@ -1,14 +1,16 @@
-package org.http4s
-package blaze
+package org.http4s.blaze.util
 
 import java.nio.ByteBuffer
-import org.http4s.blaze.pipeline.TailStage
-import scala.concurrent.{Future, ExecutionContext}
-import org.http4s.util.StringWriter
 import java.nio.charset.StandardCharsets
-import org.http4s.Header.`Content-Length`
-import scodec.bits.ByteVector
+
 import com.typesafe.scalalogging.slf4j.LazyLogging
+import org.http4s.Header.`Content-Length`
+import org.http4s.blaze.StaticWriter
+import org.http4s.blaze.pipeline.TailStage
+import org.http4s.util.StringWriter
+import scodec.bits.ByteVector
+
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
  * Created by Bryce Anderson on 4/12/14.

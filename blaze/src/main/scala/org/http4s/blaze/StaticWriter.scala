@@ -2,6 +2,7 @@ package org.http4s
 package blaze
 
 import java.nio.ByteBuffer
+import org.http4s.blaze.util.ProcessWriter
 import pipeline.TailStage
 import scala.concurrent.{ExecutionContext, Future}
 import scodec.bits.ByteVector
