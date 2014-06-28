@@ -12,25 +12,22 @@ import util.Execution._
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-import scala.concurrent.Future
 import scala.collection.mutable.ListBuffer
 import scala.util.{Try, Success, Failure}
 
 import org.http4s.Status.{NoEntityResponseGenerator, InternalServerError, NotFound}
 import org.http4s.util.StringWriter
 import org.http4s.util.CaseInsensitiveString._
-import org.http4s.Header.{`Transfer-Encoding`, Connection, `Content-Length`}
+import org.http4s.Header.{Connection, `Content-Length`}
 
 import http.http_parser.BaseExceptions.{BadRequest, ParserException}
 import http.http_parser.Http1ServerParser
 
 import scalaz.stream.Process
-import Process._
 import scalaz.concurrent.{Strategy, Task}
 import scalaz.{\/-, -\/}
 import org.parboiled2.ParseError
 import java.util.concurrent.ExecutorService
-import scodec.bits.ByteVector
 import org.http4s.blaze.channel.SocketConnection
 
 
@@ -38,7 +35,8 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
                 (implicit pool: ExecutorService = Strategy.DefaultExecutorService)
                   extends Http1ServerParser
                   with TailStage[ByteBuffer]
-                  with Http1Stage[Request] {
+                  with Http1Stage
+{
 
   protected implicit def ec = trampoline
 
@@ -108,10 +106,9 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
 
     Uri.fromString(this.uri) match {
       case Success(uri) =>
-        Request(Method.getOrElseCreate(this.method),
-          uri,
-          if (minor == 1) ServerProtocol.`HTTP/1.1` else ServerProtocol.`HTTP/1.0`,
-          h, body, requestAttrs)
+        val method = Method.getOrElseCreate(this.method)
+        val protocol = if (minor == 1) ServerProtocol.`HTTP/1.1` else ServerProtocol.`HTTP/1.0`
+        Request(method, uri, protocol, h, body, requestAttrs)
 
       case Failure(_: ParseError) =>
         val req = Request(requestUri = Uri(Some(this.uri.ci)), headers = h)

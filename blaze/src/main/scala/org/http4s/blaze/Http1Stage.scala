@@ -7,7 +7,6 @@ import com.typesafe.scalalogging.Logging
 import org.http4s.Header.`Transfer-Encoding`
 import org.http4s._
 import org.http4s.blaze.http.http_parser.BaseExceptions.ParserException
-import org.http4s.blaze.http.http_parser.BodyAndHeaderParser
 import org.http4s.blaze.pipeline.{Command, TailStage}
 import org.http4s.blaze.util.Execution._
 import org.http4s.blaze.util.{ChunkProcessWriter, CachingStaticWriter, CachingChunkWriter, ProcessWriter}
@@ -23,26 +22,12 @@ import scalaz.concurrent.Task
 /**
  * Created by Bryce Anderson on 6/24/14.
  */
-trait Http1Stage[M <: Message] { self: Logging with TailStage[ByteBuffer] =>
+trait Http1Stage { self: Logging with TailStage[ByteBuffer] =>
 
+  /** ExecutionContext to be used for all Future continuations
+    * '''WARNING:''' The ExecutionContext should trampoline or risk possibly unhandled stack overflows */
   protected implicit def ec: ExecutionContext
 
-  /** Collects the message state from the Stage
-    * '''WARNING:''' This method may return __null__ if the stage aborted and the goal is to cancel */
-  protected def collectMessage(body: HttpBody): M
-
-  /** Called when a fatal error has occurred
-    * The method logs an error and shuts down the stage, sending the error outbound
-    * @param t
-    * @param msg
-    */
-  protected def fatalError(t: Throwable, msg: String = "") {
-    logger.error(s"Fatal Error: $msg", t)
-    stageShutdown()
-    sendOutboundCommand(Command.Error(t))
-  }
-
-  // TODO: Its stupid that I have to have these methods
   protected def parserContentComplete(): Boolean
 
   protected def doParseContent(buffer: ByteBuffer): ByteBuffer
@@ -165,7 +150,8 @@ trait Http1Stage[M <: Message] { self: Logging with TailStage[ByteBuffer] =>
             cb(-\/(t))
         }
         go()
-      } else { cb(-\/(End))}
+      }
+      else cb(-\/(End))
     }
 
     val cleanup = Task.async[Unit](cb =>
@@ -177,6 +163,17 @@ trait Http1Stage[M <: Message] { self: Logging with TailStage[ByteBuffer] =>
       }(directec))
 
     repeatEval(t).onComplete(await(cleanup)(_ => halt))
+  }
+
+  /** Called when a fatal error has occurred
+    * The method logs an error and shuts down the stage, sending the error outbound
+    * @param t
+    * @param msg
+    */
+  protected def fatalError(t: Throwable, msg: String = "") {
+    logger.error(s"Fatal Error: $msg", t)
+    stageShutdown()
+    sendOutboundCommand(Command.Error(t))
   }
 
   private def drainBody(buffer: ByteBuffer): Future[Unit] = {

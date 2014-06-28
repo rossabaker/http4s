@@ -25,7 +25,7 @@ import scalaz.stream.Process.halt
 
 class Http1ClientStage(protected val timeout: Duration = 60.seconds)
                       (implicit protected val ec: ExecutionContext)
-                      extends Http1ClientReceiver with Http1Stage[Response] {
+                      extends Http1ClientReceiver with Http1Stage {
 
   protected type Callback = Throwable\/Response => Unit
 
