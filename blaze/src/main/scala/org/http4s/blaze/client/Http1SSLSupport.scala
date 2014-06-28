@@ -37,6 +37,8 @@ trait Http1SSLSupport extends Http1Support {
     case e: ExceptionInInitializerError => throw new ExceptionInInitializerError(e)
   }
 
+  /** The sslContext which will generate SSL engines for the pipeline
+    * Override to provide more specific SSL managers */
   protected lazy val sslContext = defaultTrustManagerSSLContext()
 
   override protected def buildPipeline(req: Request, closeOnFinish: Boolean): PipelineResult = {
@@ -46,7 +48,7 @@ trait Http1SSLSupport extends Http1Support {
         eng.setUseClientMode(true)
 
         val auth = req.requestUri.authority.get
-        val t = new BlazeClientStage(false)
+        val t = new Http1ClientStage()
         val b = LeafBuilder(t).prepend(new SSLStage(eng))
         val port = auth.port.getOrElse(443)
         val address = new InetSocketAddress(auth.host.toString, port)

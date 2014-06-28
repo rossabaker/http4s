@@ -1,12 +1,11 @@
 package org.http4s.blaze.client
 
-import java.nio.ByteBuffer
-
 import org.http4s._
-import org.http4s.blaze.Http1Stage
 import org.http4s.blaze.http.http_parser.Http1ClientParser
-import org.http4s.blaze.pipeline.{TailStage, Command}
+import org.http4s.blaze.pipeline.Command
 import org.http4s.util.CaseInsensitiveString
+
+import java.nio.ByteBuffer
 
 import scala.collection.mutable.ListBuffer
 import scala.util.{Failure, Success}
@@ -21,11 +20,14 @@ import scalaz.stream.Process
 
 
 abstract class Http1ClientReceiver extends Http1ClientParser
-                                      with TailStage[ByteBuffer] { self: BlazeClientStage =>
+                                      with BlazeClientStage { self: Http1ClientStage =>
 
   private val _headers = new ListBuffer[Header]
   private var _status: Status = null
   private var _protocol: ServerProtocol = null
+  private var closed = false
+
+  override def isClosed(): Boolean = closed
 
   override protected def submitResponseLine(code: Int, reason: String,
                                             scheme: String,
@@ -52,31 +54,32 @@ abstract class Http1ClientReceiver extends Http1ClientParser
     false
   }
 
-  protected def receiveResponse(cb: Callback): Unit = readAndParse(cb, "Initial Read")
+  protected def receiveResponse(cb: Callback, close: Boolean): Unit = readAndParse(cb, close, "Initial Read")
 
   // this method will get some data, and try to continue parsing using the implicit ec
-  private def readAndParse(cb: Callback, phase: String) {
+  private def readAndParse(cb: Callback,  closeOnFinish: Boolean, phase: String) {
     channelRead(timeout = timeout).onComplete {
-      case Success(buff) => requestLoop(buff, cb)
+      case Success(buff) => requestLoop(buff, closeOnFinish, cb)
       case Failure(t)    =>
         fatalError(t, s"Error during phase: $phase")
         cb(-\/(t))
     }
   }
 
-  private def requestLoop(buffer: ByteBuffer, cb: Callback): Unit = try {
+  private def requestLoop(buffer: ByteBuffer, closeOnFinish: Boolean, cb: Callback): Unit = try {
     if (!responseLineComplete() && !parseResponseLine(buffer)) {
-      readAndParse(cb, "Response Line Parsing")
+      readAndParse(cb, closeOnFinish, "Response Line Parsing")
       return
     }
 
     if (!headersComplete() && !parseHeaders(buffer)) {
-      readAndParse(cb, "Header Parsing")
+      readAndParse(cb, closeOnFinish, "Header Parsing")
       return
     }
 
     val body = collectBodyFromParser(buffer).onComplete(Process.eval_(Task {
       if (closeOnFinish) {
+        closed = true
         stageShutdown()
         sendOutboundCommand(Command.Disconnect)
       }

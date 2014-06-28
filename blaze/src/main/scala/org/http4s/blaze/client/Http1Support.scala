@@ -23,7 +23,7 @@ trait Http1Support extends PipelineBuilder {
 
     if (isHttp && req.requestUri.authority.isDefined) {
       val auth = req.requestUri.authority.get
-      val t = new BlazeClientStage(closeOnFinish)
+      val t = new Http1ClientStage()
       val b = LeafBuilder(t)
       val port = auth.port.getOrElse(80)
       val address = new InetSocketAddress(auth.host.toString, port)

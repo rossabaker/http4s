@@ -9,9 +9,7 @@ import scalaz.stream.Process.halt
  */
 class Http4sHttp1ClientStageSpec extends WordSpec with Matchers {
 
-  def makeRequest(req: Request, close: Boolean = true): Response = {
-    BlazeClient.request(req).run
-  }
+  def makeRequest(req: Request, close: Boolean = true): Response = BlazeHttp1Client.request(req).run
 
   def gatherBody(body: HttpBody): String = {
     new String(body.runLog.run.map(_.toArray).flatten.toArray)
@@ -21,14 +19,16 @@ class Http4sHttp1ClientStageSpec extends WordSpec with Matchers {
     "Make simple http requests" in {
       val req = Request(requestUri = Uri.fromString("http://www.google.com/").get)
       val resp = makeRequest(req)
+      val thebody = gatherBody(resp.body)
 //      println(resp.copy(body = halt))
-      gatherBody(resp.body)
+
       resp.status.code should equal(200)
     }
 
     "Make simple https requests" in {
       val req = Request(requestUri = Uri.fromString("https://www.google.com/").get)
       val resp = makeRequest(req)
+      val thebody = gatherBody(resp.body)
 //      println(resp.copy(body = halt))
 //      println("Body -------------------------\n" + gatherBody(resp.body) + "\n--------------------------")
       resp.status.code should equal(200)
