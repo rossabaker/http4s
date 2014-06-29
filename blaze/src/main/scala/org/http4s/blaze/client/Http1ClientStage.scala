@@ -9,7 +9,6 @@ import org.http4s.ServerProtocol.HttpVersion
 import org.http4s.Uri.Authority
 import org.http4s.blaze.util.ProcessWriter
 import org.http4s.util.{Writer, StringWriter}
-import org.http4s.blaze.pipeline.Command
 import org.http4s.util.CaseInsensitiveString._
 
 import scala.annotation.tailrec
@@ -29,39 +28,40 @@ class Http1ClientStage(protected val timeout: Duration = 60.seconds)
 
   protected type Callback = Throwable\/Response => Unit
 
-  override def name: String = "BlazeClientStage"
+  override def name: String = getClass.getName
 
   override protected def parserContentComplete(): Boolean = contentComplete()
 
   override protected def doParseContent(buffer: ByteBuffer): ByteBuffer = parseContent(buffer)
 
-  def runRequest(req: Request): Task[Response] = validateRequest(req) match {
-    case Left(e)    => Task.fail(e)
-    case Right(req) =>
-      Task.async { cb =>
-        try {
-          val rr = new StringWriter(512)
-          encodeRequestLine(req, rr)
-          encodeHeaders(req.headers, rr)
+  def runRequest(req: Request): Task[Response] = {
+    logger.debug(s"Beginning request: $req")
+    validateRequest(req) match {
+      case Left(e)    => Task.fail(e)
+      case Right(req) =>
+        Task.async { cb =>
+          try {
+            val rr = new StringWriter(512)
+            encodeRequestLine(req, rr)
+            encodeHeaders(req.headers, rr)
 
-          val closeHeader = Header.Connection.from(req.headers)
-            .map(checkCloseConnection(_, rr))
-            .getOrElse(getHttpMinor(req) == 0)
+            val closeHeader = Header.Connection.from(req.headers)
+              .map(checkCloseConnection(_, rr))
+              .getOrElse(getHttpMinor(req) == 0)
 
-          val enc = getChunkEncoder(req, closeHeader, rr)
+            val enc = getChunkEncoder(req, closeHeader, rr)
 
-          enc.writeProcess(req.body).runAsync {
-            case \/-(_)    => receiveResponse(cb, closeHeader)
-            case e@ -\/(t) => cb(e)
+            enc.writeProcess(req.body).runAsync {
+              case \/-(_)    => receiveResponse(cb, closeHeader)
+              case e@ -\/(t) => cb(e)
+            }
+          } catch { case t: Throwable =>
+            logger.error("Error during request submission", t)
+            cb(-\/(t))
           }
-        } catch { case t: Throwable =>
-          logger.error("Error during request submission", t)
-          cb(-\/(t))
         }
-      }
+    }
   }
-
-  def shutdown(): Task[Unit] = Task { sendOutboundCommand(Command.Disconnect) }
 
   ///////////////////////// Private helpers /////////////////////////
 

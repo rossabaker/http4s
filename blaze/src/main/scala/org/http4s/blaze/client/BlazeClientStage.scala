@@ -15,4 +15,6 @@ trait BlazeClientStage extends TailStage[ByteBuffer] {
   def runRequest(req: Request): Task[Response]
 
   def isClosed(): Boolean
+
+  def shutdown(): Unit
 }

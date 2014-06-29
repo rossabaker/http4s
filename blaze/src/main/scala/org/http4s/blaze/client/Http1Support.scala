@@ -7,11 +7,14 @@ import org.http4s.blaze.pipeline.LeafBuilder
 import org.http4s.util.CaseInsensitiveString._
 
 import scala.concurrent.ExecutionContext
+import scalaz.{-\/, \/-, \/}
 
 /**
  * Created by Bryce Anderson on 6/26/14.
  */
 trait Http1Support extends PipelineBuilder {
+
+  type AddressResult = \/[Throwable, InetSocketAddress]
 
   implicit protected def ec: ExecutionContext
 
@@ -22,13 +25,18 @@ trait Http1Support extends PipelineBuilder {
     }
 
     if (isHttp && req.requestUri.authority.isDefined) {
-      val auth = req.requestUri.authority.get
       val t = new Http1ClientStage()
-      val b = LeafBuilder(t)
-      val port = auth.port.getOrElse(80)
-      val address = new InetSocketAddress(auth.host.toString, port)
-      PipelineResult(b, t, address)
+      PipelineResult(LeafBuilder(t), t)
     }
     else super.buildPipeline(req, closeOnFinish)
+  }
+
+  override protected def getAddress(req: Request): AddressResult = {
+    req.requestUri
+     .authority
+     .fold[AddressResult](-\/(new Exception("Request must have an authority"))){ auth =>
+      val port = auth.port.getOrElse(80)
+      \/-(new InetSocketAddress(auth.host.toString, port))
+    }
   }
 }

@@ -1,15 +1,13 @@
 package org.http4s.blaze
 package client
 
-import java.net.InetSocketAddress
-import java.nio.ByteBuffer
-
-import org.http4s.blaze.pipeline.{HeadStage, Command}
+import com.typesafe.scalalogging.slf4j.LazyLogging
+import org.http4s.blaze.pipeline.Command
 import org.http4s.{Response, Request}
 import org.http4s.client.Client
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import scala.util.{Try, Failure, Success}
 import scalaz.{\/-, -\/}
 
 import scalaz.concurrent.Task
@@ -20,48 +18,52 @@ import scalaz.stream.Process.eval_
  */
 
 /** Base on which to implement a BlazeClient */
-trait BlazeClient extends PipelineBuilder with Client {
+trait BlazeClient extends PipelineBuilder with Client with LazyLogging {
 
   implicit protected def ec: ExecutionContext
 
-  override def request(req: Request): Task[Response] = Task.async { cb =>
-    val PipelineResult(builder, tail, addr) = buildPipeline(req, true)
+  /** Recycle or close the connection
+    * Allow for smart reuse or simple closing of a connection after the completion of a request
+    * @param request [[Request]] to connect too
+    * @param stage the [[BlazeClientStage]] which to deal with
+    */
+  protected def recycleClient(request: Request, stage: BlazeClientStage): Unit = stage.shutdown()
 
-    getConnection(addr).onComplete {
-      case Success(head) =>
-        builder.base(head)
-        head.sendInboundCommand(Command.Connected)
-        tail.runRequest(req).runAsync {
+  /** Get a connection to the provided address
+    * @param request [[Request]] to connect too
+    * @param fresh if the client should force a new connection
+    * @return a Future with the connected [[BlazeClientStage]] of a blaze pipeline
+    */
+  protected def getClient(request: Request, fresh: Boolean): Future[BlazeClientStage]
+
+
+
+  override def request(req: Request): Task[Response] = Task.async { cb =>
+    def tryClient(client: Try[BlazeClientStage], retries: Int): Unit = client match {
+      case Success(client) =>
+        client.runRequest(req).runAsync {
           case \/-(r)    =>
             val endgame = eval_(Task.delay {
-              if (!tail.isClosed()) {
-                recycleConnection(addr, tail)
+              if (!client.isClosed()) {
+                recycleClient(req, client)
               }
             })
 
             cb(\/-(r.copy(body = r.body.onComplete(endgame))))
 
+          case -\/(Command.EOF) if retries > 0 =>
+            getClient(req, true).onComplete(tryClient(_, retries - 1))
+
           case e@ -\/(_) =>
-            if (!tail.isClosed()) {
-              tail.sendOutboundCommand(Command.Disconnect)
+            if (!client.isClosed()) {
+              client.sendOutboundCommand(Command.Disconnect)
             }
             cb(e)
         }
 
       case Failure(t) => cb (-\/(t))
     }
+
+    getClient(req, false).onComplete(tryClient(_, 3))
   }
-
-  /** Recycle or close the connection
-    * Allow for smart reuse or simple closing of a connection after the completion of a request
-    * @param addr InetSocketAddress of the connection
-    * @param stage the [[BlazeClientStage]] which to deal with
-    */
-  protected def recycleConnection(addr: InetSocketAddress, stage: BlazeClientStage): Unit
-
-  /** Get a connection to the provided address
-    * @param addr InetSocketAddress to connect too
-    * @return a Future with the connected [[HeadStage]] of a blaze pipeline
-    */
-  protected def getConnection(addr: InetSocketAddress): Future[HeadStage[ByteBuffer]]
 }

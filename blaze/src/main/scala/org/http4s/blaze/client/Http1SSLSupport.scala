@@ -13,11 +13,12 @@ import org.http4s.blaze.pipeline.LeafBuilder
 import org.http4s.blaze.pipeline.stages.SSLStage
 
 import scala.concurrent.ExecutionContext
+import scalaz.{\/-, -\/, \/}
 
 
 /**
- * Created by Bryce Anderson on 6/26/14.
- */
+* Created by Bryce Anderson on 6/26/14.
+*/
 trait Http1SSLSupport extends Http1Support {
 
   implicit protected def ec: ExecutionContext
@@ -52,10 +53,21 @@ trait Http1SSLSupport extends Http1Support {
         val b = LeafBuilder(t).prepend(new SSLStage(eng))
         val port = auth.port.getOrElse(443)
         val address = new InetSocketAddress(auth.host.toString, port)
-        PipelineResult(b, t, address)
+        PipelineResult(b, t)
 
       case _ => super.buildPipeline(req, closeOnFinish)
     }
   }
 
+  override protected def getAddress(req: Request): AddressResult = {
+    req.requestUri.scheme match {
+      case Some(ci) if ci == "https".ci && req.requestUri.authority.isDefined =>
+        val auth = req.requestUri.authority.get
+        val host = auth.host.toString
+        val port = auth.port.getOrElse(443)
+        \/-(new InetSocketAddress(host, port))
+
+      case _ => super.getAddress(req)
+    }
+  }
 }

@@ -25,9 +25,14 @@ abstract class Http1ClientReceiver extends Http1ClientParser
   private val _headers = new ListBuffer[Header]
   private var _status: Status = null
   private var _protocol: ServerProtocol = null
-  private var closed = false
+  @volatile private var closed = false
 
   override def isClosed(): Boolean = closed
+
+  override def shutdown(): Unit = {
+    closed = true
+    sendOutboundCommand(Command.Disconnect)
+  }
 
   override protected def submitResponseLine(code: Int, reason: String,
                                             scheme: String,
