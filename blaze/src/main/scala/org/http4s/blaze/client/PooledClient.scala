@@ -61,7 +61,7 @@ abstract class PooledClient(maxPooledConnections: Int,
     else {
       getAddress(request).fold(Future.failed, addr => {
         cs.dequeueFirst{ case (iaddr, _) => addr == iaddr } match {
-          case Some((_,stage)) => println("Recycling!"); Future.successful(stage)
+          case Some((_,stage)) => Future.successful(stage)
           case None            => newConnection(request, addr)
         }
       })
