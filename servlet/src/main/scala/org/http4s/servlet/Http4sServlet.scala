@@ -1,16 +1,18 @@
 package org.http4s
 package servlet
 
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest, HttpServlet}
 import java.net.InetAddress
 import scala.collection.JavaConverters._
-import javax.servlet.{ServletConfig, AsyncContext}
+import javax.servlet.{AsyncEvent, AsyncListener, ServletConfig, AsyncContext}
 
 import Http4sServlet._
 import util.CaseInsensitiveString._
 
 import scala.concurrent.duration.Duration
 import scalaz.concurrent.Task
+import scalaz.stream.Process
 import scalaz.stream.io._
 import scalaz.{-\/, \/-}
 import scala.util.control.NonFatal
@@ -29,12 +31,8 @@ class Http4sServlet(service: HttpService, asyncTimeout: Duration = Duration.Inf,
   }
 
   override def service(servletRequest: HttpServletRequest, servletResponse: HttpServletResponse) {
-    try {
-      val request = toRequest(servletRequest)
-      val ctx = servletRequest.startAsync()
-      ctx.setTimeout(asyncTimeoutMillis)
-      handle(request, ctx)
-    } catch {
+    try handle(servletRequest)
+    catch {
       case NonFatal(e) => handleError(e, servletResponse)
     }
   }
@@ -53,26 +51,60 @@ class Http4sServlet(service: HttpService, asyncTimeout: Duration = Duration.Inf,
 
   }
 
-  private def handle(request: Request, ctx: AsyncContext): Unit = {
-    val servletResponse = ctx.getResponse.asInstanceOf[HttpServletResponse]
-    Task.fork {
-      service.applyOrElse(request, Status.NotFound(_: Request)).flatMap { response =>
-        servletResponse.setStatus(response.status.code, response.status.reason)
-        for (header <- response.headers)
-          servletResponse.addHeader(header.name.toString, header.value)
-        val out = servletResponse.getOutputStream
-        val isChunked = response.isChunked
-        response.body.map { chunk =>
-          out.write(chunk.toArray)
-          if (isChunked) servletResponse.flushBuffer()
-        }.run
-      }
-    }.runAsync {
+  private def handle(servletRequest: HttpServletRequest): Unit = {
+    val request = toRequest(servletRequest)
+    val stopped = new AtomicBoolean(false)
+    val ctx = servletRequest.startAsync()
+    ctx.setTimeout(asyncTimeoutMillis)
+    ctx.addListener(asyncListener(stopped))
+    Task.fork(asTask(ctx, request, stopped)).runAsync {
       case \/-(_) =>
         ctx.complete()
       case -\/(t) =>
-        handleError(t, servletResponse)
+        handleError(t, ctx.getResponse.asInstanceOf[HttpServletResponse])
         ctx.complete()
+    }
+  }
+
+  private def asyncListener(stopped: AtomicBoolean) = new AsyncListener {
+    override def onComplete(event: AsyncEvent): Unit = {}
+    override def onError(event: AsyncEvent): Unit = {
+      val req = event.getAsyncContext.getRequest.asInstanceOf[HttpServletRequest]
+      val t = event.getThrowable
+      logger.error(s"Error handing request: ${req.getMethod} ${req.getRequestURI}", t)
+      stopped.set(true)
+    }
+    override def onStartAsync(event: AsyncEvent): Unit = {}
+    override def onTimeout(event: AsyncEvent): Unit = {
+      val ctx = event.getAsyncContext
+      val req = ctx.getRequest.asInstanceOf[HttpServletRequest]
+      logger.warn(s"Timeout handing request: ${req.getMethod} ${req.getRequestURI}")
+      ctx.complete()
+      stopped.set(true)
+    }
+  }
+
+  private def asTask(ctx: AsyncContext, request: Request, stopped: AtomicBoolean) = {
+    import Process._
+    val servletResponse = ctx.getResponse.asInstanceOf[HttpServletResponse]
+    service.applyOrElse(request, Status.NotFound(_: Request)).flatMap { response =>
+      val process = eval_(renderHeader(response, servletResponse)) ++ renderBody(response, servletResponse)
+      process.until(repeatEval(Task.delay(stopped.get))).run
+    }
+  }
+
+  private def renderHeader(response: Response, servletResponse: HttpServletResponse) = Task.delay {
+    servletResponse.setStatus(response.status.code, response.status.reason)
+    for (header <- response.headers)
+      servletResponse.addHeader(header.name.toString, header.value)
+  }
+
+  private def renderBody(response: Response, servletResponse: HttpServletResponse) = {
+    val out = servletResponse.getOutputStream
+    val isChunked = response.isChunked
+    response.body.map { chunk =>
+      out.write(chunk.toArray)
+      if (isChunked) servletResponse.flushBuffer()
     }
   }
 

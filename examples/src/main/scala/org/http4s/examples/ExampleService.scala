@@ -3,6 +3,7 @@ package org.http4s.examples
 import scalaz.concurrent.Task
 import scalaz.stream.Process, Process.{Get => _, _}
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 import org.http4s._
 import org.http4s.dsl._
 import scodec.bits.ByteVector
@@ -125,6 +126,11 @@ object ExampleService extends Http4s {
 
     case req @ Get -> Root / "root-element-name" =>
       xml(req).flatMap(root => Ok(root.label))
+
+    case req @ Get -> Root / "sleep" / time =>
+      val duration = time.toInt.milliseconds
+      Ok(awakeEvery(duration).map(_ => "tick\n"))
+        .addHeader(Header.`Transfer-Encoding`(TransferCoding.chunked))
 
     case req => NotFound(req)
   }
