@@ -132,6 +132,9 @@ object ExampleService extends Http4s {
       Ok(awakeEvery(duration).map(_ => "tick\n"))
         .addHeader(Header.`Transfer-Encoding`(TransferCoding.chunked))
 
+    case req @ Get -> Root / "fail" =>
+      sys.error("fail")
+
     case req => NotFound(req)
   }
 }

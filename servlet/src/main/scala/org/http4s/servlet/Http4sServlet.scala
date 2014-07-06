@@ -20,7 +20,7 @@ import org.parboiled2.ParseError
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
 class Http4sServlet(service: HttpService, asyncTimeout: Duration = Duration.Inf, chunkSize: Int = DefaultChunkSize)
-            extends HttpServlet with LazyLogging {
+  extends HttpServlet with LazyLogging {
 
   private val asyncTimeoutMillis = if (asyncTimeout.isFinite) asyncTimeout.toMillis else -1  // -1 == Inf
 
@@ -53,43 +53,60 @@ class Http4sServlet(service: HttpService, asyncTimeout: Duration = Duration.Inf,
 
   private def handle(servletRequest: HttpServletRequest): Unit = {
     val request = toRequest(servletRequest)
-    val stopped = new AtomicBoolean(false)
+    val completed = new AtomicBoolean(false)
     val ctx = servletRequest.startAsync()
     ctx.setTimeout(asyncTimeoutMillis)
-    ctx.addListener(asyncListener(stopped))
-    Task.fork(asTask(ctx, request, stopped)).runAsync {
-      case \/-(_) =>
-        ctx.complete()
-      case -\/(t) =>
-        handleError(t, ctx.getResponse.asInstanceOf[HttpServletResponse])
-        ctx.complete()
-    }
+    ctx.addListener(asyncListener(completed))
+    val response = invokeService(request)
+    render(response, ctx, completed)
   }
 
-  private def asyncListener(stopped: AtomicBoolean) = new AsyncListener {
+  private def asyncListener(completed: AtomicBoolean) = new AsyncListener {
     override def onComplete(event: AsyncEvent): Unit = {}
+
     override def onError(event: AsyncEvent): Unit = {
-      val req = event.getAsyncContext.getRequest.asInstanceOf[HttpServletRequest]
+      val ctx = event.getAsyncContext
+      val req = ctx.getRequest.asInstanceOf[HttpServletRequest]
       val t = event.getThrowable
-      logger.error(s"Error handing request: ${req.getMethod} ${req.getRequestURI}", t)
-      stopped.set(true)
+      logger.error(s"Error handling request: ${req.getMethod} ${req.getRequestURI}", t)
+      sendInternalServerError(ctx)
     }
+
     override def onStartAsync(event: AsyncEvent): Unit = {}
+
     override def onTimeout(event: AsyncEvent): Unit = {
       val ctx = event.getAsyncContext
       val req = ctx.getRequest.asInstanceOf[HttpServletRequest]
-      logger.warn(s"Timeout handing request: ${req.getMethod} ${req.getRequestURI}")
-      ctx.complete()
-      stopped.set(true)
+      logger.error(s"Timeout handling request: ${req.getMethod} ${req.getRequestURI}")
+      sendInternalServerError(ctx)
+    }
+
+    private def sendInternalServerError(ctx: AsyncContext): Unit = {
+      val servletResponse = ctx.getResponse.asInstanceOf[HttpServletResponse]
+      if (!servletResponse.isCommitted) {
+        servletResponse.reset()
+        servletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR)
+      }
+      complete(ctx, completed)
     }
   }
 
-  private def asTask(ctx: AsyncContext, request: Request, stopped: AtomicBoolean) = {
+  private def complete(ctx: AsyncContext, completed: AtomicBoolean) = {
+    if (completed.compareAndSet(false, true))
+      ctx.complete()
+  }
+
+  private def invokeService(request: Request) = service.applyOrElse(request, Status.NotFound.apply)
+
+  private def render(responseTask: Task[Response], ctx: AsyncContext, completed: AtomicBoolean) = {
     import Process._
     val servletResponse = ctx.getResponse.asInstanceOf[HttpServletResponse]
-    service.applyOrElse(request, Status.NotFound(_: Request)).flatMap { response =>
+    responseTask.flatMap { response =>
       val process = eval_(renderHeader(response, servletResponse)) ++ renderBody(response, servletResponse)
-      process.until(repeatEval(Task.delay(stopped.get))).run
+      Task.fork(process.until(repeatEval(Task.delay(completed.get))).run)
+    }.runAsync {
+      case \/-(_) => ctx.complete()
+      case -\/(t) => throw (t)
     }
   }
 
