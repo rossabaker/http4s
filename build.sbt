@@ -17,6 +17,8 @@ lazy val tomcat = project.dependsOn(servlet)
 
 lazy val dsl = project.dependsOn(core, server % "test->compile")
 
+lazy val json = project.dependsOn(core)
+
 lazy val examples = project.dependsOn(blaze, jetty, tomcat, dsl)
 
 organization in ThisBuild := "org.http4s"
@@ -96,7 +98,8 @@ javacOptions in ThisBuild ++= Seq(
 resolvers in ThisBuild ++= Seq(
   Resolver.typesafeRepo("releases"),
   Resolver.sonatypeRepo("snapshots"),
-  "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
+  "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases",
+  "non/jawn" at "http://dl.bintray.com/non/maven"
 )
 
 /* These test dependencies applied to all projects under the http4s umbrella */
