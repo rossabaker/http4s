@@ -19,7 +19,13 @@ lazy val dsl = project.dependsOn(core, server % "test->compile")
 
 lazy val json = project.dependsOn(core)
 
-lazy val examples = project.dependsOn(blaze, jetty, tomcat, dsl)
+lazy val json4s = project.dependsOn(json)
+
+lazy val `json4s-jackson` = project.dependsOn(json4s)
+
+lazy val `json4s-native` = project.dependsOn(json4s)
+
+lazy val examples = project.dependsOn(blaze, jetty, tomcat, dsl, `json4s-native`)
 
 organization in ThisBuild := "org.http4s"
 

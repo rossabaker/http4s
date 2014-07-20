@@ -1,12 +1,14 @@
 package org.http4s.examples
 
 import org.http4s.server.HttpService
+import org.json4s.JsonAST.JNothing
 
 import scalaz.concurrent.Task
 import scalaz.stream.Process, Process.{Get => _, _}
 import scala.concurrent.{ExecutionContext, Future}
 import org.http4s._
 import org.http4s.dsl._
+import org.http4s.json4s.native.Json4sNativeSupport._
 import scodec.bits.ByteVector
 
 object ExampleService extends Http4s {
@@ -129,6 +131,16 @@ object ExampleService extends Http4s {
 
     case req @ GET -> Root / "root-element-name" =>
       xml(req).flatMap(root => Ok(root.label))
+
+    // Echoes the "echo" value of the posted JSON object
+    case req @ POST -> Root / "json-echo" =>
+      req.body.parseJson.flatMap { json =>
+        println("Received json: "+json)
+        json \ "echo" match {
+          case JNothing => BadRequest("Nothing to echo")
+          case echo => Ok(echo)
+        }
+      }
 
     case req => NotFound(req)
   }
