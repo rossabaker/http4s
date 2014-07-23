@@ -12,10 +12,6 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
 import scalaz.concurrent.Task
 import scalaz.{-\/, \/-}
 
-/**
- * @author Bryce Anderson
- *         Created on 1/10/14
- */
 class ChunkProcessWriter(private var headers: StringWriter, pipe: TailStage[ByteBuffer], trailer: Task[Headers])
                               (implicit val ec: ExecutionContext) extends ProcessWriter {
 

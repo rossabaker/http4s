@@ -8,10 +8,6 @@ import org.http4s._
 import scalaz.concurrent.Task
 import scalaz.stream.Process._
 
-
-/**
- * Created by Bryce Anderson on 3/28/14.
- */
 object ServerTestRoutes {
 
   val textPlain: Header = `Content-Type`.`text/plain`.withCharset(CharacterSet.`UTF-8`)

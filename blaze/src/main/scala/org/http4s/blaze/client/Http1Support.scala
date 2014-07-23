@@ -9,9 +9,6 @@ import org.http4s.util.CaseInsensitiveString._
 import scala.concurrent.ExecutionContext
 import scalaz.{-\/, \/-, \/}
 
-/**
- * Created by Bryce Anderson on 6/26/14.
- */
 trait Http1Support extends PipelineBuilder {
 
   type AddressResult = \/[Throwable, InetSocketAddress]

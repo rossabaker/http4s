@@ -13,9 +13,6 @@ import scala.collection.mutable.Queue
 import scalaz.concurrent.Task
 import scalaz.stream.Process.halt
 
-/**
-* Created by Bryce Anderson on 6/28/14.
-*/
 
 /** Provides a foundation for pooling clients */
 abstract class PooledClient(maxPooledConnections: Int,

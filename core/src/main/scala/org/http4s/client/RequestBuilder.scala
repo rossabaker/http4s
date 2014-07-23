@@ -3,9 +3,6 @@ package org.http4s.client
 import org.http4s.{Uri, Method, Request}
 
 
-/**
- * Created by Bryce Anderson on 6/24/14.
- */
 trait RequestBuilder {
 
   final def GET(uri: String): Request = Request(Method.Get, parseUri(uri))

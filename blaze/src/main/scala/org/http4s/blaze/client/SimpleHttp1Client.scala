@@ -10,9 +10,6 @@ import scala.concurrent.{Future, ExecutionContext}
 
 import scalaz.concurrent.Task
 
-/**
- * Created by Bryce Anderson on 6/27/14.
- */
 
 /** A default implementation of the Blaze Asynchronous client for HTTP/1.x */
 abstract class SimpleHttp1Client(bufferSize: Int, group: Option[AsynchronousChannelGroup])

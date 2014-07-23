@@ -13,10 +13,6 @@ import scalaz.{\/-, -\/}
 import scalaz.concurrent.Task
 import scalaz.stream.Process.eval_
 
-/**
- * Created by Bryce Anderson on 6/24/14.
- */
-
 /** Base on which to implement a BlazeClient */
 trait BlazeClient extends PipelineBuilder with Client with LazyLogging {
 

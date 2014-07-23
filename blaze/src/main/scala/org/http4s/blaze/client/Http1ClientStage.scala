@@ -6,7 +6,7 @@ import java.nio.ByteBuffer
 
 import org.http4s.Header.{`Content-Length`, Host}
 import org.http4s.ServerProtocol.HttpVersion
-import org.http4s.Uri.Authority
+import org.http4s.Uri.{RegName, Authority}
 import org.http4s.blaze.util.ProcessWriter
 import org.http4s.util.{Writer, StringWriter}
 import org.http4s.util.CaseInsensitiveString._
@@ -17,10 +17,6 @@ import scala.concurrent.duration._
 import scalaz.{\/-, -\/, \/}
 import scalaz.concurrent.Task
 import scalaz.stream.Process.halt
-
-/**
- * Created by Bryce Anderson on 6/24/14.
- */
 
 class Http1ClientStage(protected val timeout: Duration = 60.seconds)
                       (implicit protected val ec: ExecutionContext)
@@ -78,10 +74,10 @@ class Http1ClientStage(protected val timeout: Duration = 60.seconds)
       // Ensure we have a host header for HTTP/1.1
     else if (minor == 1 && req.requestUri.host.isEmpty) { // this is unlikely if not impossible
       if (Host.from(req.headers).isDefined) {
-        val host = Host.from(req.headers).get.value.ci
+        val host = Host.from(req.headers).get
         val newAuth = req.requestUri.authority match {
-          case Some(auth) => auth.copy(host = host)
-          case None => Authority(host = host)
+          case Some(auth) => auth.copy(host = RegName(host.host), port = host.port)
+          case None => Authority(host = RegName(host.host), port = host.port)
         }
         validateRequest(req.copy(requestUri = req.requestUri.copy(authority = Some(newAuth))))
       }
@@ -109,7 +105,7 @@ class Http1ClientStage(protected val timeout: Duration = 60.seconds)
     if (getHttpMinor(req) == 1 && Host.from(req.headers).isEmpty) { // need to add the host header for HTTP/1.1
       uri.host match {
         case Some(host) =>
-          writer ~ "Host: " ~ host
+          writer ~ "Host: " ~ host.toString
           if (uri.port.isDefined)  writer ~ ':' ~ uri.port.get
           writer ~ '\r' ~ '\n'
 

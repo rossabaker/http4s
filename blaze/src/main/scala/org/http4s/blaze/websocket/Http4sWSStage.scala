@@ -16,12 +16,6 @@ import pipeline.Command.EOF
 import http.websocket.WebSocketDecoder
 import http.websocket.WebSocketDecoder._
 
-/**
- * Created by Bryce Anderson on 3/30/14.
- */
-
-
-
 class Http4sWSStage(ws: ws4s.Websocket) extends TailStage[WebSocketFrame] {
   def name: String = "Http4s WebSocket Stage"
 

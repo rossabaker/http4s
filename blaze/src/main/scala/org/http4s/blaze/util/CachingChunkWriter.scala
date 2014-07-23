@@ -11,10 +11,6 @@ import scodec.bits.ByteVector
 import scala.concurrent.{ExecutionContext, Future}
 import scalaz.concurrent.Task
 
-
-/**
- * Created by Bryce Anderson on 4/12/14.
- */
 class CachingChunkWriter(headers: StringWriter,
                          pipe: TailStage[ByteBuffer],
                          trailer: Task[Headers],

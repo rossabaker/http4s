@@ -1,8 +1,40 @@
 import sbt._
 
+import scala.util.Properties.envOrNone
+
+object Http4sBuild {
+  def extractApiVersion(version: String) = {
+    val VersionExtractor = """(\d+)\.(\d+)\..*""".r
+    version match {
+      case VersionExtractor(major, minor) => (major.toInt, minor.toInt)
+    }
+  }
+
+  lazy val travisCredentials = (envOrNone("SONATYPE_USER"), envOrNone("SONATYPE_PASS")) match {
+    case (Some(user), Some(pass)) =>
+      Some(Credentials("Sonatype Nexus Repository Manager", "oss.sonatype.org", user, pass))
+    case _ =>
+      None
+  }
+
+  def nexusRepoFor(version: String): Resolver = {
+    val nexus = "https://oss.sonatype.org/"
+    if (isSnapshot(version))
+      "snapshots" at nexus + "content/repositories/snapshots"
+    else
+      "releases" at nexus + "service/local/staging/deploy/maven2"
+  }
+
+  def isSnapshot(version: String): Boolean = version.endsWith("-SNAPSHOT")
+}
+
+object Http4sKeys {
+  val apiVersion = TaskKey[(Int, Int)]("api-version", "Defines the API compatibility version for the project.")
+}
+
 object Http4sDependencies {
   lazy val base64              = "net.iharder"               % "base64"                  % "2.3.8"
-  lazy val blaze               = "org.http4s"               %% "blaze-http"              % "0.2.0-SNAPSHOT"
+  lazy val blaze               = "org.http4s"               %% "blaze-http"              % "0.2.0"
   lazy val config              = "com.typesafe"              % "config"                  % "1.0.0"
   lazy val javaxServletApi     = "javax.servlet"             % "javax.servlet-api"       % "3.0.1"
   lazy val jettyServer         = "org.eclipse.jetty"         % "jetty-server"            % "9.1.4.v20140401"

@@ -14,11 +14,6 @@ import scalaz.{\/-, -\/}
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 
-/**
- * Created by Bryce Anderson on 6/25/14.
- */
-
-
 abstract class Http1ClientReceiver extends Http1ClientParser
                                       with BlazeClientStage { self: Http1ClientStage =>
 

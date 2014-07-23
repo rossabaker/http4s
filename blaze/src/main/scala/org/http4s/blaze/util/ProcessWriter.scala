@@ -9,12 +9,6 @@ import scalaz.stream.Process
 import scalaz.stream.Process._
 import scalaz.{-\/, \/, \/-}
 
-/**
- * @author Bryce Anderson
- *         Created on 12/4/13
- */
-
-// TODO: this is a straight copy of the netty trait
 trait ProcessWriter {
 
   implicit protected def ec: ExecutionContext

@@ -1,11 +1,6 @@
 package org.http4s
 package blaze
 
-/**
- * @author Bryce Anderson
- *         Created on 1/10/14
- */
-
 import pipeline.{Command => Cmd, TailStage}
 import util.Execution._
 

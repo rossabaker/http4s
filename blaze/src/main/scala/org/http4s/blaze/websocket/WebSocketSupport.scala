@@ -14,10 +14,6 @@ import scala.util.{Failure, Success}
 import org.http4s.blaze.pipeline.LeafBuilder
 import scodec.bits.ByteVector
 
-
-/**
- * Created by Bryce Anderson on 3/30/14.
- */
 trait WebSocketSupport extends Http1ServerStage {
   override protected def renderResponse(req: Request, resp: Response): Unit = {
     val ws = resp.attributes.get(org.http4s.websocket.websocketKey)

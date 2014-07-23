@@ -15,10 +15,6 @@ import org.http4s.blaze.pipeline.stages.SSLStage
 import scala.concurrent.ExecutionContext
 import scalaz.{\/-, -\/, \/}
 
-
-/**
-* Created by Bryce Anderson on 6/26/14.
-*/
 trait Http1SSLSupport extends Http1Support {
 
   implicit protected def ec: ExecutionContext

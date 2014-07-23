@@ -9,9 +9,6 @@ import scala.concurrent.duration._
 
 import scalaz.stream.Process.halt
 
-/**
- * Created by Bryce Anderson on 6/25/14.
- */
 class Http4sSimpleHttp1ClientSpec extends WordSpec with Matchers {
 
   def gatherBody(body: HttpBody): String = {

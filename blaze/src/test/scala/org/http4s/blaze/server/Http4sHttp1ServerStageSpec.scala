@@ -1,9 +1,5 @@
 package org.http4s.blaze.server
 
-/**
- * Created by Bryce Anderson on 3/28/14.
- */
-
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 

@@ -1,3 +1,4 @@
+import Http4sKeys._
 import Http4sDependencies._
 
 name := "http4s-core"
@@ -24,7 +25,7 @@ seq(buildInfoSettings:_*)
 
 sourceGenerators in Compile <+= buildInfo
 
-buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion)
+buildInfoKeys := Seq[BuildInfoKey](version, scalaVersion, apiVersion)
 
 buildInfoPackage <<= organization
 

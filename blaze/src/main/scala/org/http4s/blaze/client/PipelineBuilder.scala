@@ -8,9 +8,6 @@ import org.http4s.blaze.pipeline.LeafBuilder
 
 import scalaz.\/
 
-/**
- * Created by Bryce Anderson on 6/26/14.
- */
 trait PipelineBuilder {
 
   protected case class PipelineResult(builder: LeafBuilder[ByteBuffer], tail: BlazeClientStage)

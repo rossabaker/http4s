@@ -7,10 +7,6 @@ import org.http4s.blaze.pipeline.TailStage
 
 import scalaz.concurrent.Task
 
-/**
- * Created by Bryce Anderson on 6/27/14.
- */
-
 trait BlazeClientStage extends TailStage[ByteBuffer] {
   def runRequest(req: Request): Task[Response]
 

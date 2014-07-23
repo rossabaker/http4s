@@ -19,9 +19,6 @@ import scalaz.stream.Process._
 import scalaz.{-\/, \/-}
 import scalaz.concurrent.Task
 
-/**
- * Created by Bryce Anderson on 6/24/14.
- */
 trait Http1Stage { self: Logging with TailStage[ByteBuffer] =>
 
   /** ExecutionContext to be used for all Future continuations

@@ -11,6 +11,7 @@ import javax.servlet.{ServletConfig, AsyncContext}
 import Http4sServlet._
 import util.CaseInsensitiveString._
 
+import scala.concurrent.duration.Duration
 import scalaz.concurrent.Task
 import scalaz.stream.io._
 import scalaz.{-\/, \/-}
@@ -18,7 +19,11 @@ import scala.util.control.NonFatal
 import org.parboiled2.ParseError
 import com.typesafe.scalalogging.slf4j.LazyLogging
 
-class Http4sServlet(service: HttpService, chunkSize: Int = DefaultChunkSize) extends HttpServlet with LazyLogging {
+class Http4sServlet(service: HttpService, asyncTimeout: Duration = Duration.Inf, chunkSize: Int = DefaultChunkSize)
+            extends HttpServlet with LazyLogging {
+
+  private val asyncTimeoutMillis = if (asyncTimeout.isFinite) asyncTimeout.toMillis else -1  // -1 == Inf
+
   private[this] var serverSoftware: ServerSoftware = _
 
   override def init(config: ServletConfig) {
@@ -29,6 +34,7 @@ class Http4sServlet(service: HttpService, chunkSize: Int = DefaultChunkSize) ext
     try {
       val request = toRequest(servletRequest)
       val ctx = servletRequest.startAsync()
+      ctx.setTimeout(asyncTimeoutMillis)
       handle(request, ctx)
     } catch {
       case NonFatal(e) => handleError(e, servletResponse)

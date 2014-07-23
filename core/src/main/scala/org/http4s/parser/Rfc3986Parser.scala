@@ -25,8 +25,8 @@ private[parser] trait Rfc3986Parser { this: Parser =>
   def UriReference = rule { Uri | RelativeRef }
 
   def AbsoluteUri = rule {
-    Scheme ~ ":" ~ HierPart ~ optional("?" ~ Query) ~>
-      ((scheme, auth, path, query) => org.http4s.Uri(scheme = Some(scheme), authority = auth, path = path, query = query))
+    Scheme ~ ":" ~ HierPart ~ optional("?" ~ Query) ~ optional("#" ~ Fragment) ~>
+      ((scheme, auth, path, query, fragment) => org.http4s.Uri(Some(scheme), auth, path, query, fragment))
   }
 
   def RelativeRef = rule { RelativePart ~ optional("?" ~ Query) ~ optional("#" ~ Fragment) }
@@ -46,7 +46,11 @@ private[parser] trait Rfc3986Parser { this: Parser =>
 
   def UserInfo = rule { capture(zeroOrMore(Unreserved | PctEncoded | SubDelims | ":")) ~> (decode _) }
 
-  def Host = rule { (IpLiteral | capture(IpV4Address | IpV6Address | RegName)) ~> (s => decode(s).ci) }
+  def Host: Rule1[org.http4s.Uri.Host] = rule {
+    capture(IpV4Address) ~> { s: String => org.http4s.Uri.IPv4(s.ci) } |
+      (IpLiteral | capture(IpV6Address)) ~> { s: String => org.http4s.Uri.IPv6(s.ci) } |
+      capture(RegName) ~> { s: String => org.http4s.Uri.RegName(decode(s).ci) }
+  }
 
   def Port = rule { ":" ~ (capture(oneOrMore(Digit)) ~> {s: String => (Some(s.toInt))} |  push(None)) |  push(None) }
 
@@ -55,15 +59,15 @@ private[parser] trait Rfc3986Parser { this: Parser =>
   def IpVFuture = rule { "v" ~ oneOrMore(HexDigit) ~ "." ~ oneOrMore(Unreserved | SubDelims | ":" ) }
 
   def IpV6Address: Rule0 = rule {
-                                                            6.times(H16 ~ ":") ~ LS32 |
-                                                     "::" ~ 5.times(H16 ~ ":") ~ LS32 |
-    optional(                                 H16) ~ "::" ~ 4.times(H16 ~ ":") ~ LS32 |
-    optional((1 to 2).times(H16).separatedBy(":")) ~ "::" ~ 3.times(H16 ~ ":") ~ LS32 |
-    optional((2 to 3).times(H16).separatedBy(":")) ~ "::" ~ 2.times(H16 ~ ":") ~ LS32 |
-    optional((3 to 4).times(H16).separatedBy(":")) ~ "::" ~         H16 ~ ":"  ~ LS32 |
-    optional((4 to 5).times(H16).separatedBy(":")) ~ "::" ~                      LS32 |
-    optional((1 to 6).times(H16).separatedBy(":")) ~ "::" ~                      H16  |
-    optional((1 to 7).times(H16).separatedBy(":")) ~ "::"
+                                                   6.times(H16 ~ ":") ~ LS32 |
+                                            "::" ~ 5.times(H16 ~ ":") ~ LS32 |
+          optional(H16) ~                   "::" ~ 4.times(H16 ~ ":") ~ LS32 |
+    (0 to 2).times(H16).separatedBy(":")  ~ "::" ~ 3.times(H16 ~ ":") ~ LS32 |
+    (0 to 3).times(H16).separatedBy(":")  ~ "::" ~ 2.times(H16 ~ ":") ~ LS32 |
+    (0 to 4).times(H16).separatedBy(":")  ~ "::" ~         H16 ~ ":"  ~ LS32 |
+    (0 to 5).times(H16).separatedBy(":")  ~ "::" ~                      LS32 |
+    (0 to 6).times(H16).separatedBy(":")  ~ "::" ~                      H16  |
+    (0 to 7).times(H16).separatedBy(":")  ~ "::"
   }
 
   def H16 = rule { (1 to 4).times(HexDigit) }
@@ -102,7 +106,7 @@ private[parser] trait Rfc3986Parser { this: Parser =>
 
   def Pchar = rule { Unreserved | PctEncoded | SubDelims | ":" | "@" }
 
-  def Query = rule { capture(oneOrMore(Pchar | "/" | "?")) ~> (decode _) }
+  def Query = rule { capture(zeroOrMore(Pchar | "/" | "?")) ~> (decode _) }
 
   def Fragment = rule { capture(zeroOrMore(Pchar | "/" | "?")) ~> (decode _) }
 
