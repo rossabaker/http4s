@@ -1,25 +1,27 @@
-package org.http4s.blaze.client
+package org.http4s
+package blaze.client
 
-import org.http4s.{HttpBody, Uri, Request, Response}
+import Method._
 import org.scalatest.{Matchers, WordSpec}
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scalaz.concurrent.Task
 
 import scalaz.stream.Process.halt
 
-class Http4sSimpleHttp1ClientSpec extends WordSpec with Matchers {
+class BlazeHttp1ClientSpec extends WordSpec with Matchers {
 
   def gatherBody(body: HttpBody): String = {
     new String(body.runLog.run.map(_.toArray).flatten.toArray)
   }
 
   "Simple Http1 Client" should {
-    def makeRequest(req: Request, close: Boolean = true): Response = SimpleHttp1Client.request(req).run
+    def makeRequest(req: Task[Request]): Response = SimpleHttp1Client.request(req).run
 
     "Make simple http requests" in {
-      val req = Request(requestUri = Uri.fromString("http://www.google.com/").get)
+      val req = Get("http://www.google.com/")
       val resp = makeRequest(req)
       val thebody = gatherBody(resp.body)
 //      println(resp.copy(body = halt))
@@ -28,7 +30,7 @@ class Http4sSimpleHttp1ClientSpec extends WordSpec with Matchers {
     }
 
     "Make simple https requests" in {
-      val req = Request(requestUri = Uri.fromString("https://www.google.com/").get)
+      val req = Get("https://www.google.com/")
       val resp = makeRequest(req)
       val thebody = gatherBody(resp.body)
 //      println(resp.copy(body = halt))
@@ -40,10 +42,10 @@ class Http4sSimpleHttp1ClientSpec extends WordSpec with Matchers {
   "RecyclingHttp1Client" should {
     val client = new PooledHttp1Client()
 
-    def makeRequest(req: Request, close: Boolean = true): Response = client.request(req).run
+    def makeRequest(req: Task[Request]): Response = client.request(req).run
 
     "Make simple http requests" in {
-      val req = Request(requestUri = Uri.fromString("http://www.google.com/").get)
+      val req = Get("http://www.google.com/")
       val resp = makeRequest(req)
       val thebody = gatherBody(resp.body)
       //      println(resp.copy(body = halt))
@@ -54,7 +56,7 @@ class Http4sSimpleHttp1ClientSpec extends WordSpec with Matchers {
     "Repeat a simple http request" in {
       val f = 0 until 10 map { _ =>
         Future {
-          val req = Request(requestUri = Uri.fromString("http://www.google.com/").get)
+          val req = Get("http://www.google.com/")
           val resp = makeRequest(req)
           val thebody = gatherBody(resp.body)
           //      println(resp.copy(body = halt))
@@ -67,7 +69,7 @@ class Http4sSimpleHttp1ClientSpec extends WordSpec with Matchers {
     }
 
     "Make simple https requests" in {
-      val req = Request(requestUri = Uri.fromString("https://www.google.com/").get)
+      val req = Get("https://www.google.com/")
       val resp = makeRequest(req)
       val thebody = gatherBody(resp.body)
       //      println(resp.copy(body = halt))

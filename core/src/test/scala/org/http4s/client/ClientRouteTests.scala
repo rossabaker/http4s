@@ -1,7 +1,6 @@
 package org.http4s.client
 
-
-
+import org.http4s.Uri.{Authority, RegName}
 import org.http4s._
 
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest, HttpServlet}
@@ -11,10 +10,6 @@ import org.scalatest.{Matchers, WordSpec}
 
 import java.net.InetSocketAddress
 
-/**
- * Created by Bryce Anderson on 6/25/14.
- */
-
 // TODO: there is no way this will fly on specs2.
 trait ClientRouteTests { self: WordSpec with Matchers =>
 
@@ -22,8 +17,14 @@ trait ClientRouteTests { self: WordSpec with Matchers =>
 
   protected def name: String
 
+  protected val client: Client
+
   // The main entry method for this
-  protected def runTest(req: Request, address: InetSocketAddress): Response
+  protected def runTest(req: Request, address: InetSocketAddress): Response = {
+    val newreq = req.copy(requestUri = req.requestUri.copy(authority = Some(Authority(host = RegName(address.getHostName),
+                                                                                      port = Some(address.getPort)))))
+    client.request(newreq).run
+  }
 
   protected def runAllTests() {
     val address = new InetSocketAddress("localhost", 0)
@@ -81,7 +82,7 @@ trait ClientRouteTests { self: WordSpec with Matchers =>
     resp.headers.foreach(h =>srv.addHeader(h.name.toString, h.value))
   }
 
-  private def collectBody(body: HttpBody): Seq[Byte] = body.runLog.run.map(_.toArray).flatten.toSeq
+  private def collectBody(body: HttpBody): Array[Byte] = body.runLog.run.toArray.map(_.toArray).flatten
 
   /////////////// Define the routes here ////////////////////////////////
 
