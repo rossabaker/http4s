@@ -7,7 +7,9 @@ lazy val core = project
 
 lazy val server = project.dependsOn(core)
 
-lazy val blaze = project.dependsOn(server)
+lazy val client = project.dependsOn(core, server % "test->compile")
+
+lazy val blaze = project.dependsOn(server, client)
 
 lazy val servlet = project.dependsOn(server)
 

@@ -1,14 +1,14 @@
-package org.http4s.client
-
-import org.http4s.Uri.{Authority, RegName}
-import org.http4s._
-
-import javax.servlet.http.{HttpServletResponse, HttpServletRequest, HttpServlet}
-import org.eclipse.jetty.server.{Server => JServer, ServerConnector}
-import org.eclipse.jetty.servlet.{ServletHolder, ServletContextHandler}
-import org.scalatest.{Matchers, WordSpec}
+package org.http4s
+package client
 
 import java.net.InetSocketAddress
+import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
+
+import org.eclipse.jetty.server.{Server => JServer, ServerConnector}
+import org.eclipse.jetty.servlet.{ServletHolder, ServletContextHandler}
+
+import org.http4s.Uri.{Authority, RegName}
+import org.scalatest.{Matchers, WordSpec}
 
 // TODO: there is no way this will fly on specs2.
 trait ClientRouteTests { self: WordSpec with Matchers =>

@@ -16,11 +16,6 @@ libraryDependencies ++= Seq(
   Http4sDependencies.config
 )
 
-// Test dependencies
-libraryDependencies ++= Seq(
-  jettyServlet
-).map(_ % "test")
-
 seq(buildInfoSettings:_*)
 
 sourceGenerators in Compile <+= buildInfo
