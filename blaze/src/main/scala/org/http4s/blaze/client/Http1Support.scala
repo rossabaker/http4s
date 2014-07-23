@@ -33,7 +33,7 @@ trait Http1Support extends PipelineBuilder {
      .authority
      .fold[AddressResult](-\/(new Exception("Request must have an authority"))){ auth =>
       val port = auth.port.getOrElse(80)
-      \/-(new InetSocketAddress(auth.host.toString, port))
+      \/-(new InetSocketAddress(auth.host.value, port))
     }
   }
 }

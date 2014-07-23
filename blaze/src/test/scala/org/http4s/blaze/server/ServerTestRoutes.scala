@@ -1,12 +1,13 @@
-package org.http4s.blaze.server
+package org.http4s
+package blaze
 
-import org.http4s.Header._
-import org.http4s.Http4s._
 import org.http4s.Status.Ok
-import org.http4s._
+import org.http4s.server.HttpService
+import org.http4s.Http4s._
+import org.http4s.Header._
 
-import scalaz.concurrent.Task
 import scalaz.stream.Process._
+import scalaz.concurrent.Task
 
 object ServerTestRoutes {
 

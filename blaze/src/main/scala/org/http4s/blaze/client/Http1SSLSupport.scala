@@ -48,7 +48,7 @@ trait Http1SSLSupport extends Http1Support {
         val t = new Http1ClientStage()
         val b = LeafBuilder(t).prepend(new SSLStage(eng))
         val port = auth.port.getOrElse(443)
-        val address = new InetSocketAddress(auth.host.toString, port)
+        val address = new InetSocketAddress(auth.host.value, port)
         PipelineResult(b, t)
 
       case _ => super.buildPipeline(req, closeOnFinish)
@@ -56,14 +56,15 @@ trait Http1SSLSupport extends Http1Support {
   }
 
   override protected def getAddress(req: Request): AddressResult = {
-    req.requestUri.scheme match {
+    val addr = req.requestUri.scheme match {
       case Some(ci) if ci == "https".ci && req.requestUri.authority.isDefined =>
         val auth = req.requestUri.authority.get
-        val host = auth.host.toString
+        val host = auth.host.value
         val port = auth.port.getOrElse(443)
         \/-(new InetSocketAddress(host, port))
 
       case _ => super.getAddress(req)
     }
+    addr
   }
 }

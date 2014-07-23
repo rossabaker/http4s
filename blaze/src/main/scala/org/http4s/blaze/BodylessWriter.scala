@@ -10,7 +10,6 @@ import java.nio.ByteBuffer
 import org.http4s.blaze.pipeline.TailStage
 import scala.util.{Failure, Success}
 
-
 /** Discards the body, killing it so as to clean up resources
   *
   * @param headers ByteBuffer representation of [[Headers]] to send

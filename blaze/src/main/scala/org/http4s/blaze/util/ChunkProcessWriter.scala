@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets
 import org.http4s.Headers
 import org.http4s.blaze.pipeline.TailStage
 import org.http4s.util.StringWriter
+
 import scodec.bits.ByteVector
 
 import scala.concurrent.{ExecutionContext, Future, Promise}

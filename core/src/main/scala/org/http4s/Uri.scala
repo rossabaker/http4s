@@ -203,7 +203,11 @@ object Uri {
   }
 
   sealed trait Host {
-    override def toString: String = renderHost(this)
+    final def value: String = this match {
+      case RegName(h) => h.toString
+      case IPv4(a)    => a.toString
+      case IPv6(a)    => a.toString
+    }
   }
   case class RegName(host: CaseInsensitiveString) extends Host
   case class IPv4(address: CaseInsensitiveString) extends Host

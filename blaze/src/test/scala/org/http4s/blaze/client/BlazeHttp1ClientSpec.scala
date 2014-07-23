@@ -17,7 +17,7 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
     new String(body.runLog.run.map(_.toArray).flatten.toArray)
   }
 
-  "Simple Http1 Client" should {
+  "Blaze Simple Http1 Client" should {
     def makeRequest(req: Task[Request]): Response = SimpleHttp1Client.request(req).run
 
     "Make simple http requests" in {

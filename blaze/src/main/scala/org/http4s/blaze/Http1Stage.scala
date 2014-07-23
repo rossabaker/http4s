@@ -1,11 +1,11 @@
-package org.http4s.blaze
+package org.http4s
+package blaze
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-
 import com.typesafe.scalalogging.Logging
+
 import org.http4s.Header.`Transfer-Encoding`
-import org.http4s._
 import org.http4s.blaze.http.http_parser.BaseExceptions.ParserException
 import org.http4s.blaze.pipeline.{Command, TailStage}
 import org.http4s.blaze.util.Execution._

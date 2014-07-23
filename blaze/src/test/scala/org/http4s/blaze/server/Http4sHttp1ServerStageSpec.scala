@@ -1,5 +1,6 @@
 package org.http4s.blaze.server
 
+import org.scalatest.{Matchers, WordSpec}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 

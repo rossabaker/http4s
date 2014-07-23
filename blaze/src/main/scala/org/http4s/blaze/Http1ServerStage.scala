@@ -14,11 +14,11 @@ import org.http4s.Status.{NoEntityResponseGenerator, InternalServerError, NotFou
 import org.http4s.util.StringWriter
 import org.http4s.util.CaseInsensitiveString._
 import org.http4s.Header.{Connection, `Content-Length`}
+import org.http4s.server.HttpService
 
 import http.http_parser.BaseExceptions.{BadRequest, ParserException}
 import http.http_parser.Http1ServerParser
 
-import scalaz.stream.Process
 import scalaz.concurrent.{Strategy, Task}
 import scalaz.{\/-, -\/}
 import org.parboiled2.ParseError
