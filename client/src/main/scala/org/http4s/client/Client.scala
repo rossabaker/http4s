@@ -17,7 +17,7 @@ trait Client {
     * @param req [[Request]] containing the headers, URI, etc.
     * @return Task which will generate the Response
     */
-  final def request(req: Task[Request]): Task[Response] = req.flatMap(request(_))
+  final def prepare(req: Task[Request]): Task[Response] = req.flatMap(request(_))
 
   /** Shutdown this client, closing any open connections and freeing resources */
   def shutdown(): Task[Unit]

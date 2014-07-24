@@ -9,7 +9,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scalaz.concurrent.Task
 
-import scalaz.stream.Process.halt
+import org.http4s.client.ClientSyntax
 
 class BlazeHttp1ClientSpec extends WordSpec with Matchers {
 
@@ -18,11 +18,10 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
   }
 
   "Blaze Simple Http1 Client" should {
-    def makeRequest(req: Task[Request]): Response = SimpleHttp1Client.request(req).run
+    implicit def client = SimpleHttp1Client
 
     "Make simple http requests" in {
-      val req = Get("http://www.google.com/")
-      val resp = makeRequest(req)
+      val resp = Get("http://www.google.com/").exec.run
       val thebody = gatherBody(resp.body)
 //      println(resp.copy(body = halt))
 
@@ -30,8 +29,7 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
     }
 
     "Make simple https requests" in {
-      val req = Get("https://www.google.com/")
-      val resp = makeRequest(req)
+      val resp = Get("https://www.google.com/").exec.run
       val thebody = gatherBody(resp.body)
 //      println(resp.copy(body = halt))
 //      println("Body -------------------------\n" + gatherBody(resp.body) + "\n--------------------------")
@@ -40,13 +38,10 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
   }
 
   "RecyclingHttp1Client" should {
-    val client = new PooledHttp1Client()
-
-    def makeRequest(req: Task[Request]): Response = client.request(req).run
+    implicit val client = new PooledHttp1Client()
 
     "Make simple http requests" in {
-      val req = Get("http://www.google.com/")
-      val resp = makeRequest(req)
+      val resp = Get("http://www.google.com/").exec.run
       val thebody = gatherBody(resp.body)
       //      println(resp.copy(body = halt))
 
@@ -56,8 +51,7 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
     "Repeat a simple http request" in {
       val f = 0 until 10 map { _ =>
         Future {
-          val req = Get("http://www.google.com/")
-          val resp = makeRequest(req)
+          val resp = Get("http://www.google.com/").exec.run
           val thebody = gatherBody(resp.body)
           //      println(resp.copy(body = halt))
 
@@ -69,8 +63,7 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
     }
 
     "Make simple https requests" in {
-      val req = Get("https://www.google.com/")
-      val resp = makeRequest(req)
+      val resp = Get("https://www.google.com/").exec.run
       val thebody = gatherBody(resp.body)
       //      println(resp.copy(body = halt))
       //      println("Body -------------------------\n" + gatherBody(resp.body) + "\n--------------------------")
