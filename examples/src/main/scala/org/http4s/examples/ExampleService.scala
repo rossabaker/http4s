@@ -48,7 +48,7 @@ object ExampleService extends Http4s with Json4sJacksonSupport {
       }
 
     case req @ POST -> Root / "shortsum"  =>
-      text(req, limit = 3).flatMap { s =>
+      text(3)(req).flatMap { s =>
         val sum = s.split('\n').map(_.toInt).sum
         Ok(sum)
       } handleWith { case EntityTooLarge(_) =>

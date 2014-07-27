@@ -17,8 +17,9 @@ object EntityBody extends EntityBodyFunctions {
 }
 
 trait EntityBodyFunctions {
+  def text: Message => Task[String] = text(EntityBody.DefaultMaxEntitySize)
 
-  def text(msg: Message, limit: Int = EntityBody.DefaultMaxEntitySize): Task[String] = {
+  def text(limit: Int)(msg: Message): Task[String] = {
     val buff = new StringBuilder
     (msg.body |> takeBytes(limit) |> processes.fold(buff) { (b, c) => {
       b.append(new String(c.toArray, (msg.charset.charset)))
@@ -34,14 +35,14 @@ trait EntityBodyFunctions {
    * @param parser the SAX parser to use to parse the XML
    * @return an XML element
    */
-  def xml(msg: Message,
-          limit: Int = EntityBody.DefaultMaxEntitySize,
-          parser: SAXParser = XML.parser): Task[Elem] =
-    text(msg, limit).map { s =>
+  def xml(limit: Int, parser: SAXParser)(msg: Message): Task[Elem] =
+    text(limit)(msg).map { s =>
     // TODO: exceptions here should be handled by Task, but are not until 7.0.5+
       val source = new InputSource(new StringReader(s))
       XML.loadXML(source, parser)
     }
+
+  def xml: Message => Task[Elem] = xml(EntityBody.DefaultMaxEntitySize, XML.parser)
 
   private def takeBytes(n: Int): Process1[ByteVector, ByteVector] = {
     def go(taken: Int, chunk: ByteVector): Process1[ByteVector, ByteVector] = {

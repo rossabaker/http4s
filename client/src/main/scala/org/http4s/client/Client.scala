@@ -6,17 +6,6 @@ import org.http4s._
 import scala.util.control.NoStackTrace
 import scalaz.concurrent.Task
 
-trait EntityDecoder[T] {
-  def apply(msg: Message, limit: Int): Task[T]
-  final def apply(msg: Message): Task[T] = apply(msg, EntityBody.DefaultMaxEntitySize)
-}
-
-object EntityDecoder {
-  implicit val text: EntityDecoder[String] = new EntityDecoder[String] {
-    override def apply(msg: Message, limit: Int): Task[String] = EntityBody.text(msg, limit)
-  }
-}
-
 
 trait Client {
 
@@ -35,10 +24,10 @@ trait Client {
   /** Shutdown this client, closing any open connections and freeing resources */
   def shutdown(): Task[Unit]
 
-  final def request[A](req: Task[Request])(implicit parser: EntityDecoder[A]): Task[A] =
-    req.flatMap(req => request(req)(parser))
+  final def request[A](req: Task[Request], parser: Response => Task[A]): Task[A] =
+    req.flatMap(req => request(req, parser))
   
-  final def request[A](req: Request)(implicit parser: EntityDecoder[A]): Task[A] = prepare(req).flatMap { resp =>
+  final def request[A](req: Request, parser: Response => Task[A]): Task[A] = prepare(req).flatMap { resp =>
     if (resp.status == Status.Ok) parser(resp)
     else EntityBody.text(resp).flatMap(str => Task.fail(BadResponse(resp.status, str)))
   }
