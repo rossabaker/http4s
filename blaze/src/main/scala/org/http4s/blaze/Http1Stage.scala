@@ -118,8 +118,8 @@ trait Http1Stage { self: Logging with TailStage[ByteBuffer] =>
       }
   }
 
-  protected def collectBodyFromParser(buffer: ByteBuffer): HttpBody = {
-    if (parserContentComplete()) return HttpBody.empty
+  protected def collectBodyFromParser(buffer: ByteBuffer): EntityBody = {
+    if (parserContentComplete()) return EntityBody.empty
 
     @volatile var currentbuffer = buffer
 

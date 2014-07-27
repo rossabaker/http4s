@@ -1,68 +1,99 @@
 package org.http4s
 
-import scala.language.postfixOps
+import java.io.{StringReader, ByteArrayInputStream, FileWriter, File}
+import java.nio.charset.StandardCharsets
+
+import org.specs2.mutable.Specification
+
+import scala.concurrent.Future
+import scalaz.Rope
 import scalaz.concurrent.Task
+import scalaz.stream.text.utf8Decode
+import scalaz.stream.Process
 
-// the http4s team resents importing this.
+object WritableSpec {
+  def writeToString[A](a: A)(implicit W: Writable[A]): String =
+    Process.eval(W.toEntity(a))
+      .collect { case Writable.Entity(body, _ ) => body }
+      .flatMap(identity)
+      .fold1Monoid
+      .pipe(utf8Decode)
+      .runLastOr("")
+      .run
+}
 
-import org.http4s.Status._
-import concurrent.Future
-import org.scalatest.{Matchers, WordSpec}
+class WritableSpec extends Specification with Http4s {
+  import WritableSpec.writeToString
 
-class WritableSpec extends WordSpec with Matchers {
   "Writable" should {
-    import Writable._
-
-    def route(in: Task[Response]) = {
-      new String(in.run.body.runLog.run.reduce(_ ++ _).toArray)
+    "render strings" in {
+      writeToString("pong") must_== "pong"
     }
 
-
-    "Get Strings" in {
-      route {Ok("pong")} should equal("pong")
+    "calculate the content length of strings" in {
+      implicitly[Writable[String]].toEntity("pong").run.length must_== Some(4)
     }
 
-    "Get Sequences of Strings" in {
-      val result = (0 until 1000).map{ i => s"This is string number $i" }
-      route{Ok(result)} should equal (result.foldLeft ("")(_ + _))
+    "render integers" in {
+      writeToString(1) must_== "1"
     }
 
-    "Get Sequences of Ints" in {
-      val input = (0 until 10)
-      route{Ok(input)} should equal (input.foldLeft ("")(_ + _))
+    "render html" in {
+      val html = <html><body>Hello</body></html>
+      writeToString(html) must_== "<html><body>Hello</body></html>"
     }
 
-    "Get Integers" in {
-      route{Ok(1)} should equal ("1")
-    }
-
-    "Get Html" in {
-      val myxml = <html><body>Hello</body></html>
-      route { Ok(myxml) } should equal (myxml.buildString(false))
-    }
-
-    "Get Array[Byte]" in {
+    "render byte arrays" in {
       val hello = "hello"
-      route { Ok(hello.getBytes) } should equal(hello)
+      writeToString(hello.getBytes(StandardCharsets.UTF_8)) must_== hello
     }
 
-    "Get Futures" in {
-      import concurrent.ExecutionContext.Implicits.global
-      val txt = "Hello"
-      route(Ok(Future(txt))) should equal (txt)
+    "render futures" in {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val hello = "Hello"
+      writeToString(Future(hello)) must_== hello
     }
 
-    "Get Tasks" in {
-      val txt = "Hello"
-      route(Ok(Task(txt))) should equal (txt)
+    "render Tasks" in {
+      val hello = "Hello"
+      writeToString(Task.now(hello)) must_== hello
     }
 
-    "Get Processes" in {
-      import scalaz.stream.Process.emit
-      val txt = "Hello"
-      route(Ok(emit(txt))) should equal (txt)
+    "render processes" in {
+      val helloWorld = Process("hello", "world")
+      writeToString(helloWorld) must_== "helloworld"
     }
 
+    "render files" in {
+      val tmpFile = File.createTempFile("http4s-test-", ".txt")
+      try {
+        val w = new FileWriter(tmpFile)
+        try w.write("render files test")
+        finally w.close()
+        writeToString(tmpFile) must_== "render files test"
+      }
+      finally tmpFile.delete()
+    }
+
+    "render input streams" in {
+      val inputStream = new ByteArrayInputStream(("input stream").getBytes(StandardCharsets.UTF_8))
+      writeToString(inputStream) must_== "input stream"
+    }
+
+    "render readers" in {
+      val reader = new StringReader("string reader")
+      writeToString(reader) must_== "string reader"
+    }
+
+    "render text ropes" in {
+      val rope = Rope.fromString("text rope")
+      writeToString(rope) must_== "text rope"
+    }
+
+    "render binary ropes" in {
+      val rope = Rope.fromArray("binary rope".getBytes(StandardCharsets.UTF_8))
+      writeToString(rope) must_== "binary rope"
+    }
   }
 }
 

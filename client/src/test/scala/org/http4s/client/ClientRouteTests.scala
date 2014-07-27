@@ -8,10 +8,9 @@ import org.eclipse.jetty.server.{Server => JServer, ServerConnector}
 import org.eclipse.jetty.servlet.{ServletHolder, ServletContextHandler}
 
 import org.http4s.Uri.{Authority, RegName}
-import org.scalatest.{Matchers, WordSpec}
+import org.specs2.mutable.Specification
 
-// TODO: there is no way this will fly on specs2.
-trait ClientRouteTests { self: WordSpec with Matchers =>
+trait ClientRouteTests { self: Specification =>
 
   import org.http4s.Http4s._
 
@@ -64,11 +63,11 @@ trait ClientRouteTests { self: WordSpec with Matchers =>
     }
   }
 
-  private def checkResponse(rec: Response, expected: Response): Unit = {
-    rec.headers.toSet should equal(expected.headers.toSet)    // Have to do set to avoid order problems
-    rec.status should equal(expected.status)
-    rec.protocol should equal(expected.protocol)
-    collectBody(rec.body) should equal(collectBody(expected.body))
+  private def checkResponse(rec: Response, expected: Response) = {
+    (rec.headers.toSet must be_==(expected.headers.toSet)) &&   // Have to do set to avoid order problems
+      (rec.status must be_==(expected.status)) &&
+      (rec.protocol must be_==(expected.protocol)) &&
+      (collectBody(rec.body) must be_==(collectBody(expected.body)))
   }
 
   private def translateTests(port: Int, method: Method, paths: Map[String, Response]): Map[Request, Response] = {
@@ -82,7 +81,7 @@ trait ClientRouteTests { self: WordSpec with Matchers =>
     resp.headers.foreach(h =>srv.addHeader(h.name.toString, h.value))
   }
 
-  private def collectBody(body: HttpBody): Array[Byte] = body.runLog.run.toArray.map(_.toArray).flatten
+  private def collectBody(body: EntityBody): Array[Byte] = body.runLog.run.toArray.map(_.toArray).flatten
 
   /////////////// Define the routes here ////////////////////////////////
 

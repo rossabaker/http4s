@@ -40,7 +40,7 @@ abstract class Http1ClientReceiver extends Http1ClientParser
     }
   }
 
-  protected def collectMessage(body: HttpBody): Response = {
+  protected def collectMessage(body: EntityBody): Response = {
     val status   = if (_status == null) Status.InternalServerError else _status
     val headers  = if (_headers.isEmpty) Headers.empty else Headers(_headers.result())
     val protocol = if (_protocol == null) ServerProtocol.ExtensionVersion(CaseInsensitiveString("Not received"))

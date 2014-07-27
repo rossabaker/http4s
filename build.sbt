@@ -19,7 +19,15 @@ lazy val tomcat = project.dependsOn(servlet)
 
 lazy val dsl = project.dependsOn(core, server % "test->compile")
 
-lazy val examples = project.dependsOn(blaze, jetty, tomcat, dsl)
+lazy val json4s = project.dependsOn(core)
+
+lazy val json4sNative = project.dependsOn(json4s)
+
+lazy val json4sJackson = project.dependsOn(json4s)
+
+lazy val argonaut = project.dependsOn(core % "compile;test->test")
+
+lazy val examples = project.dependsOn(blaze, jetty, tomcat, dsl, json4sJackson)
 
 organization in ThisBuild := "org.http4s"
 
@@ -73,7 +81,7 @@ scalaVersion in ThisBuild := "2.10.4"
 
 crossScalaVersions in ThisBuild := Seq(
   "2.10.4",
-  "2.11.1"
+  "2.11.2"
 )
 
 val JvmTarget = "1.7"
@@ -104,7 +112,6 @@ resolvers in ThisBuild ++= Seq(
 /* These test dependencies applied to all projects under the http4s umbrella */
 libraryDependencies in ThisBuild ++= Seq(
   scalameter % "test",
-  scalatest % "test", // use is deprecated
   specs2 % "test"
 )
 

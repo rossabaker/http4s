@@ -95,7 +95,7 @@ class Http1ServerStage(service: HttpService, conn: Option[SocketConnection])
     case Failure(t)       => fatalError(t, "Error in requestLoop()")
   }
 
-  protected def collectMessage(body: HttpBody): Request = {
+  protected def collectMessage(body: EntityBody): Request = {
     val h = Headers(headers.result())
     headers.clear()
 

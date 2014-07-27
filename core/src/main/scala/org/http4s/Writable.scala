@@ -1,91 +1,143 @@
 package org.http4s
 
-import scalaz.stream.Process
-import scala.concurrent.{ExecutionContext, Future}
-import scalaz.concurrent.Task
+import java.io.{InputStream, File, Reader}
+import java.nio.{CharBuffer, ByteBuffer}
+import java.nio.file.Path
 import scala.language.implicitConversions
-import org.http4s.Header.`Content-Type`
-import org.http4s.util.task._
+import scalaz._
+import scalaz.concurrent.Task
+import scalaz.std.list._
+import scalaz.std.option._
+import scalaz.stream.{Channel, io, Process}
+import scalaz.stream.Process.{End, emit}
+import scalaz.syntax.apply._
 import scodec.bits.ByteVector
 
-trait Writable[-A] {
-  def contentType: `Content-Type`
-  def toBody(a: A): Task[(HttpBody, Option[Int])]
+import org.http4s.Header.`Content-Type`
+
+case class Writable[-A](
+  toEntity: A => Task[Writable.Entity],
+  headers: Headers
+) {
+  def contramap[B](f: B => A): Writable[B] = copy(toEntity = f andThen toEntity)
+
+  def withContentType(contentType: `Content-Type`) = copy(headers = headers.put(contentType))
 }
 
 object Writable extends WritableInstances {
-  def apply[A](body: A)(implicit w: Writable[A]): Task[(HttpBody, Option[Int])] = w.toBody(body)
+  case class Entity(body: EntityBody, length: Option[Int] = None)
 
-  def get[A](body: A)(implicit w: Writable[A]): HttpBody = apply(body).run._1
+  object Entity {
+    implicit val entityInstance: Monoid[Entity] = Monoid.instance(
+      (a, b) => Entity(a.body ++ b.body, (a.length |@| b.length) { _ + _ }),
+      empty
+    )
+
+    lazy val empty = Entity(EntityBody.empty, Some(0))
+  }
+
+  def simple[A](toChunk: A => ByteVector, headers: Headers = Headers.empty): Writable[A] = Writable(
+    toChunk andThen { chunk => Task.now(Entity(emit(chunk), Some(chunk.size))) },
+    headers
+  )
 }
 
-trait SimpleWritable[-A] extends Writable[A] {
-  def asChunk(data: A): ByteVector
-  override def toBody(a: A): Task[(HttpBody, Option[Int])] = {
-    val chunk = asChunk(a)
-    Task.now((Process.emit(chunk), Some(chunk.length)))
-  }
+import Writable._
+
+trait WritableInstances0 {
+  implicit def showWritable[A](implicit charset: CharacterSet = CharacterSet.`UTF-8`, show: Show[A]): Writable[A] =
+    simple(
+      a => ByteVector.view(show.shows(a).getBytes(charset.charset)),
+      Headers(`Content-Type`.`text/plain`.withCharset(charset))
+    )
+
+  implicit def naturalTransformationWritable[F[_], A](implicit W: Writable[A], N: ~>[F, Task]): Writable[F[A]] =
+    taskWritable[A].contramap { f: F[A] => N(f) }
+
+  /**
+   * A process writable is intended for streaming, and does not calculate its bodies in
+   * advance.  As such, it does not calculate the Content-Length in advance.  This is for
+   * use with chunked transfer encoding.
+   */
+  // TODO buggy at bufSize > 1
+  // TODO configurable bufSize
+  implicit def processWritable[A](implicit W: Writable[A]): Writable[Process[Task, A]] =
+    W.copy(toEntity = { process =>
+      Task.now(Entity(process.flatMap(a => Process.await(W.toEntity(a))(_.body)), None))
+    })
 }
 
-trait WritableInstances {
-  // Simple types defined
-  implicit def stringWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`) =
-    new SimpleWritable[String] {
-      def contentType: `Content-Type` = `Content-Type`.`text/plain`.withCharset(charset)
-      def asChunk(s: String) = ByteVector.view(s.getBytes(charset.charset))
+trait WritableInstances extends WritableInstances0 {
+  implicit def stringWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`): Writable[String] = simple(
+    s => ByteVector.view(s.getBytes(charset.charset)),
+    Headers(`Content-Type`.`text/plain`.withCharset(charset))
+  )
+
+  implicit def charSequenceWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`): Writable[CharSequence] =
+    stringWritable.contramap(_.toString)
+
+  implicit def charArrayWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`): Writable[Array[Char]] =
+    stringWritable.contramap(new String(_))
+
+  implicit val byteVectorWritable: Writable[ByteVector] = simple(
+    identity,
+    Headers(`Content-Type`.`application/octet-stream`)
+  )
+
+  implicit val byteArrayWritable: Writable[Array[Byte]] = byteVectorWritable.contramap(ByteVector.apply)
+
+  implicit val byteBufferWritable: Writable[ByteBuffer] = byteVectorWritable.contramap(ByteVector.apply)
+
+  // TODO split off to module to drop scala-xml core dependency
+  // TODO infer HTML, XHTML, etc.
+  implicit def htmlWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`): Writable[xml.Elem] = simple(
+    xml => ByteVector.view(xml.buildString(false).getBytes(charset.charset)),
+    Headers(`Content-Type`(MediaType.`text/html`).withCharset(charset))
+  )
+
+  implicit def taskWritable[A](implicit W: Writable[A]): Writable[Task[A]] =
+    W.copy(toEntity = _.flatMap(W.toEntity))
+
+  // TODO parameterize chunk size
+  // TODO if Header moves to Entity, can add a Content-Disposition with the filename
+  implicit val fileWritable: Writable[File] =
+    chunkedWritable { f: File => io.fileChunkR(f.getAbsolutePath) }
+
+  // TODO parameterize chunk size
+  // TODO if Header moves to Entity, can add a Content-Disposition with the filename
+  implicit val filePathWritable: Writable[Path] = fileWritable.contramap(_.toFile)
+
+  // TODO parameterize chunk size
+  implicit val inputStreamWritable: Writable[InputStream] =
+    chunkedWritable { is: InputStream => io.chunkR(is) }
+
+  // TODO parameterize chunk size
+  implicit def readerWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`): Writable[Reader] =
+    // TODO polish and contribute back to scalaz-stream
+    processWritable[Array[Char]].contramap { r: Reader =>
+      val unsafeChunkR = io.resource(Task.delay(r))(
+        src => Task.delay(src.close())) { src =>
+        Task.now { buf: Array[Char] => Task.delay {
+          val m = src.read(buf)
+          println("BUFFER = "+buf.subSequence(0, m))
+          if (m == buf.length) buf
+          else if (m == -1) throw End
+          else buf.slice(0, m)
+        }}
+      }
+      val chunkR = unsafeChunkR.map(f => (n: Int) => {
+        val buf = new Array[Char](n)
+        f(buf)
+      })
+      Process.constant(4096).through(chunkR)
     }
 
-  implicit def byteWritable = new SimpleWritable[Array[Byte]] {
-    def asChunk(data: Array[Byte]): ByteVector = ByteVector(data)
-    def contentType: `Content-Type` = `Content-Type`.`application/octet-stream`
-  }
+  def chunkedWritable[A](f: A => Channel[Task, Int, ByteVector], chunkSize: Int = 4096): Writable[A] =
+    processWritable[ByteVector].contramap { a => Process.constant(chunkSize).through(f(a)) }
 
-  implicit def htmlWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`) =
-    new SimpleWritable[xml.Elem] {
-      def contentType: `Content-Type` = `Content-Type`(MediaType.`text/html`).withCharset(charset)
-      def asChunk(s: xml.Elem) = ByteVector.view(s.buildString(false).getBytes(charset.charset))
-    }
+  implicit def charRopeWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`): Writable[Rope[Char]] =
+    stringWritable.contramap(_.asString)
 
-  implicit def intWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`) =
-    new SimpleWritable[Int] {
-      def contentType: `Content-Type` = `Content-Type`.`text/plain`.withCharset(charset)
-      def asChunk(i: Int) = ByteVector.view(i.toString.getBytes(charset.charset))
-    }
-
-
-  implicit def taskWritable[A](implicit writable: Writable[A]) =
-    new Writable[Task[A]] {
-      def contentType: `Content-Type` = writable.contentType
-      def toBody(a: Task[A]) = a.flatMap(writable.toBody(_))
-    }
-
-  /*
-  implicit def functorWritable[F[_], A](implicit F: Functor[F], writable: Writable[A]) =
-    new Writable[F[A]] {
-      def contentType = writable.contentType
-      private def send(fa: F[A]) = Process.emit(fa.map(writable.toBody(_)._1)).eval.join
-      override def toBody(fa: F[A]) = (send(fa), None)
-    }
-  */
-
-  implicit def processWritable[A](implicit w: SimpleWritable[A]) = new Writable[Process[Task, A]] {
-    def contentType: `Content-Type` = w.contentType
-
-    def toBody(a: Process[Task, A]): Task[(HttpBody, Option[Int])] = Task.now((a.map(w.asChunk), None))
-  }
-
-  implicit def seqWritable[A](implicit w: SimpleWritable[A]) = new Writable[Seq[A]] {
-    def contentType: `Content-Type` = w.contentType
-
-    def toBody(a: Seq[A]): Task[(HttpBody, Option[Int])] = {
-      val p = Process.emit(a.foldLeft(ByteVector.empty)((acc, c) => acc ++ w.asChunk(c)))
-      Task.now((p, None))
-    }
-  }
-
-  implicit def futureWritable[A](implicit ec: ExecutionContext, writable: Writable[A]) =
-    new Writable[Future[A]] {
-      def contentType: `Content-Type` = writable.contentType
-      def toBody(f: Future[A]) = taskWritable[A].toBody(futureToTask(ec)(f))
-    }
+  implicit def byteRopeWritable(implicit charset: CharacterSet = CharacterSet.`UTF-8`): Writable[Rope[Byte]] =
+     byteArrayWritable.contramap(_.toArray)
 }

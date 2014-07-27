@@ -1,5 +1,7 @@
 package org.http4s
 
+import org.http4s.Writable.Entity
+
 import scalaz.concurrent.Task
 import java.net.{URL, URI}
 import org.http4s.Header.`Content-Type`
@@ -56,15 +58,13 @@ object Status extends StatusInstances {
     def apply(): Task[Response] = Task.now(StatusResponder)
 
     def apply[A](body: A)(implicit w: Writable[A]): Task[Response] =
-      apply(body, w.contentType)(w)
+      apply(body, w.headers)(w)
 
-    def apply[A](body: A, contentType: `Content-Type`)(implicit w: Writable[A]): Task[Response] = {
-      var headers: Headers = Headers.empty
-      // tuple assignment runs afoul of https://issues.scala-lang.org/browse/SI-5301
-      headers +:= contentType
-      w.toBody(body).flatMap { case (proc, len) =>
-        len foreach { headers +:= Header.`Content-Length`(_) }
-        Task.now(Response(status = self, headers = headers, body = proc))
+    def apply[A](body: A, headers: Headers)(implicit w: Writable[A]): Task[Response] = {
+      var h = headers ++ w.headers
+      w.toEntity(body).flatMap { case Entity(proc, len) =>
+        len foreach { h +:= Header.`Content-Length`(_) }
+        Task.now(Response(status = self, headers = h, body = proc))
       }
     }
   }
@@ -114,7 +114,7 @@ trait StatusInstances {
   object SwitchingProtocols extends Status(101, "Switching Protocols") {
     // TODO type this header
     def apply(protocols: String, headers: Headers = Headers.empty): Response =
-      Response(status = this, headers = Header("Upgrade", protocols) +: headers, body = HttpBody.empty)
+      Response(status = this, headers = Header("Upgrade", protocols) +: headers, body = EntityBody.empty)
   }
   val Processing = new Status(102, "Processing") with NoEntityResponseGenerator
 

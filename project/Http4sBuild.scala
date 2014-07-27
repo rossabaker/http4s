@@ -33,6 +33,7 @@ object Http4sKeys {
 }
 
 object Http4sDependencies {
+  lazy val argonaut            = "io.argonaut"              %% "argonaut"                % "6.0.4"
   lazy val base64              = "net.iharder"               % "base64"                  % "2.3.8"
   lazy val blaze               = "org.http4s"               %% "blaze-http"              % "0.2.0"
   lazy val config              = "com.typesafe"              % "config"                  % "1.0.0"
@@ -40,6 +41,9 @@ object Http4sDependencies {
   lazy val jettyServer         = "org.eclipse.jetty"         % "jetty-server"            % "9.1.4.v20140401"
   lazy val jettyServlet        = "org.eclipse.jetty"         % "jetty-servlet"           % jettyServer.revision
   lazy val jettyWebSocket      = "org.eclipse.jetty"         % "jetty-websocket"         % jettyServer.revision
+  lazy val json4sCore          = "org.json4s"               %% "json4s-core"             % "3.2.10"
+  lazy val json4sJackson       = "org.json4s"               %% "json4s-jackson"          % json4sCore.revision
+  lazy val json4sNative        = "org.json4s"               %% "json4s-native"           % json4sCore.revision
   lazy val jspApi              = "javax.servlet.jsp"         % "javax.servlet.jsp-api"   % "2.3.1" // YourKit hack
   lazy val junit               = "junit"                     % "junit"                   % "4.11"
   lazy val logbackClassic      = "ch.qos.logback"            % "logback-classic"         % "1.0.9"
@@ -50,6 +54,7 @@ object Http4sDependencies {
   lazy val scalameter          = "com.github.axel22"        %% "scalameter"              % "0.5-M2"
   lazy val scalatest           = "org.scalatest"            %% "scalatest"               % "2.1.3"
   lazy val scalazStream        = "org.scalaz.stream"        %% "scalaz-stream"           % "0.4.1"
+  lazy val scodecCore          = "org.typelevel"            %% "scodec-core"             % "1.1.0"
   lazy val specs2              = "org.specs2"               %% "specs2"                  % "2.3.11"
   lazy val tomcatCatalina      = "org.apache.tomcat"         % "tomcat-catalina"         % "7.0.53"
   lazy val tomcatCoyote        = "org.apache.tomcat"         % "tomcat-coyote"           % tomcatCatalina.revision

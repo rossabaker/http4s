@@ -2,18 +2,17 @@ package org.http4s
 package blaze.client
 
 import Method._
-import org.scalatest.{Matchers, WordSpec}
+import org.specs2.mutable.Specification
+import org.specs2.time.NoTimeConversions
 
 import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
-import scalaz.concurrent.Task
 
 import org.http4s.client.ClientSyntax
 
-class BlazeHttp1ClientSpec extends WordSpec with Matchers {
+class BlazeHttp1ClientSpec extends Specification with NoTimeConversions {
 
-  def gatherBody(body: HttpBody): String = {
+  def gatherBody(body: EntityBody): String = {
     new String(body.runLog.run.map(_.toArray).flatten.toArray)
   }
 
@@ -25,7 +24,7 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
       val thebody = gatherBody(resp.body)
 //      println(resp.copy(body = halt))
 
-      resp.status.code should equal(200)
+      resp.status.code must be_==(200)
     }
 
     "Make simple https requests" in {
@@ -33,9 +32,11 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
       val thebody = gatherBody(resp.body)
 //      println(resp.copy(body = halt))
 //      println("Body -------------------------\n" + gatherBody(resp.body) + "\n--------------------------")
-      resp.status.code should equal(200)
+      resp.status.code must be_==(200)
     }
   }
+
+  sequential
 
   "RecyclingHttp1Client" should {
     implicit val client = new PooledHttp1Client()
@@ -45,7 +46,7 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
       val thebody = gatherBody(resp.body)
       //      println(resp.copy(body = halt))
 
-      resp.status.code should equal(200)
+      resp.status.code must be_==(200)
     }
 
     "Repeat a simple http request" in {
@@ -55,7 +56,7 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
           val thebody = gatherBody(resp.body)
           //      println(resp.copy(body = halt))
 
-          resp.status.code should equal(200)
+          resp.status.code must be_==(200)
         }
       } reduce((f1, f2) => f1.flatMap(_ => f2))
 
@@ -67,11 +68,12 @@ class BlazeHttp1ClientSpec extends WordSpec with Matchers {
       val thebody = gatherBody(resp.body)
       //      println(resp.copy(body = halt))
       //      println("Body -------------------------\n" + gatherBody(resp.body) + "\n--------------------------")
-      resp.status.code should equal(200)
+      resp.status.code must be_==(200)
     }
 
     "Shutdown the client" in {
       client.shutdown().run
+      true must be_==(true)
     }
   }
 }
