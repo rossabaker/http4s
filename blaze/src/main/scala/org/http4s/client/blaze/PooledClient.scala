@@ -1,4 +1,4 @@
-package org.http4s.blaze.client
+package org.http4s.client.blaze
 
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
@@ -7,9 +7,8 @@ import org.http4s.Request
 import org.http4s.blaze.channel.nio2.ClientChannelFactory
 import org.http4s.blaze.util.Execution
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.mutable.Queue
-
+import scala.concurrent.{ExecutionContext, Future}
 import scalaz.concurrent.Task
 import scalaz.stream.Process.halt
 

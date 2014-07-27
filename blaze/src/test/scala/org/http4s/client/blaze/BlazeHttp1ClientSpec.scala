@@ -1,14 +1,13 @@
-package org.http4s
-package blaze.client
+package org.http4s.client.blaze
 
-import Method._
+import org.http4s.Method._
+import org.http4s._
+import org.http4s.client.ClientSyntax
 import org.specs2.mutable.Specification
 import org.specs2.time.NoTimeConversions
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
-
-import org.http4s.client.ClientSyntax
+import scala.concurrent.{Await, Future}
 
 class BlazeHttp1ClientSpec extends Specification with NoTimeConversions {
 
@@ -74,6 +73,16 @@ class BlazeHttp1ClientSpec extends Specification with NoTimeConversions {
     "Shutdown the client" in {
       client.shutdown().run
       true must be_==(true)
+    }
+  }
+
+  "Client syntax" should {
+    implicit def client = SimpleHttp1Client
+    "be simple to use" in {
+      val resp = Get("http://www.google.com/").collect[String].run
+      println(resp)
+
+      resp.isEmpty must be_==(false)
     }
   }
 }

@@ -1,18 +1,17 @@
-package org.http4s.blaze.client
+package org.http4s.client.blaze
+
+import java.nio.ByteBuffer
 
 import org.http4s._
 import org.http4s.blaze.http.http_parser.Http1ClientParser
 import org.http4s.blaze.pipeline.Command
 import org.http4s.util.CaseInsensitiveString
 
-import java.nio.ByteBuffer
-
 import scala.collection.mutable.ListBuffer
 import scala.util.{Failure, Success}
-
-import scalaz.{\/-, -\/}
 import scalaz.concurrent.Task
 import scalaz.stream.Process
+import scalaz.{-\/, \/-}
 
 abstract class Http1ClientReceiver extends Http1ClientParser
                                       with BlazeClientStage { self: Http1ClientStage =>

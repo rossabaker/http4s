@@ -18,26 +18,26 @@ object EntityBody extends EntityBodyFunctions {
 
 trait EntityBodyFunctions {
 
-  def text[A](req: Request, limit: Int = EntityBody.DefaultMaxEntitySize): Task[String] = {
+  def text(msg: Message, limit: Int = EntityBody.DefaultMaxEntitySize): Task[String] = {
     val buff = new StringBuilder
-    (req.body |> takeBytes(limit) |> processes.fold(buff) { (b, c) => {
-      b.append(new String(c.toArray, (req.charset.charset)))
+    (msg.body |> takeBytes(limit) |> processes.fold(buff) { (b, c) => {
+      b.append(new String(c.toArray, (msg.charset.charset)))
     }}).map(_.result()).runLastOr("")
   }
 
   /**
-   * Handles a request body as XML.
+   * Handles a message body as XML.
    *
    * TODO Not an ideal implementation.  Would be much better with an asynchronous XML parser, such as Aalto.
    *
    * @param limit the maximum size before an EntityTooLarge error is returned
    * @param parser the SAX parser to use to parse the XML
-   * @return a request handler
+   * @return an XML element
    */
-  def xml(req: Request,
+  def xml(msg: Message,
           limit: Int = EntityBody.DefaultMaxEntitySize,
           parser: SAXParser = XML.parser): Task[Elem] =
-    text(req, limit).map { s =>
+    text(msg, limit).map { s =>
     // TODO: exceptions here should be handled by Task, but are not until 7.0.5+
       val source = new InputSource(new StringReader(s))
       XML.loadXML(source, parser)
@@ -59,17 +59,17 @@ trait EntityBodyFunctions {
 
   // File operations
   // TODO: rewrite these using NIO non blocking FileChannels
-  def binFile(req: Request, file: java.io.File)(f: => Task[Response]) = {
+  def binFile(msg: Message, file: java.io.File)(f: => Task[Response]) = {
     val out = new java.io.FileOutputStream(file)
-    req.body
+    msg.body
       .map{c => out.write(c.toArray) }
       .run.flatMap{_ => out.close(); f}
   }
 
-  def textFile(req: Request, in: java.io.File)(f: => Task[Response]): Task[Response] = {
+  def textFile(msg: Message, in: java.io.File)(f: => Task[Response]): Task[Response] = {
     val is = new java.io.PrintStream(new FileOutputStream(in))
-    req.body
-      .map{ d => is.print(new String(d.toArray, req.charset.charset)) }
+    msg.body
+      .map{ d => is.print(new String(d.toArray, msg.charset.charset)) }
       .run.flatMap{_ => is.close(); f}
   }
 }

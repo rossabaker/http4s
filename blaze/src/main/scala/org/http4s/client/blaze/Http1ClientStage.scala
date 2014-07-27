@@ -1,22 +1,21 @@
-package org.http4s
-package blaze
-package client
+package org.http4s.client.blaze
 
 import java.nio.ByteBuffer
 
-import org.http4s.Header.{`Content-Length`, Host}
+import org.http4s.Header.{Host, `Content-Length`}
 import org.http4s.ServerProtocol.HttpVersion
-import org.http4s.Uri.{RegName, Authority}
+import org.http4s.Uri.{Authority, RegName}
+import org.http4s.blaze.Http1Stage
 import org.http4s.blaze.util.ProcessWriter
-import org.http4s.util.{Writer, StringWriter}
-import org.http4s.util.CaseInsensitiveString._
+import org.http4s.util.{StringWriter, Writer}
+import org.http4s.{Header, Request, Response, ServerProtocol}
 
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scalaz.{\/-, -\/, \/}
 import scalaz.concurrent.Task
 import scalaz.stream.Process.halt
+import scalaz.{-\/, \/, \/-}
 
 class Http1ClientStage(protected val timeout: Duration = 60.seconds)
                       (implicit protected val ec: ExecutionContext)

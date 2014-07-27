@@ -22,7 +22,7 @@ trait ClientRouteTests { self: Specification =>
   protected def runTest(req: Request, address: InetSocketAddress): Response = {
     val newreq = req.copy(requestUri = req.requestUri.copy(authority = Some(Authority(host = RegName(address.getHostName),
                                                                                       port = Some(address.getPort)))))
-    client.request(newreq).run
+    client.prepare(newreq).run
   }
 
   protected def runAllTests() {

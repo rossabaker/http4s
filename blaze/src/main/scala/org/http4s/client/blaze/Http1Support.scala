@@ -1,4 +1,4 @@
-package org.http4s.blaze.client
+package org.http4s.client.blaze
 
 import java.net.InetSocketAddress
 
@@ -7,7 +7,7 @@ import org.http4s.blaze.pipeline.LeafBuilder
 import org.http4s.util.CaseInsensitiveString._
 
 import scala.concurrent.ExecutionContext
-import scalaz.{-\/, \/-, \/}
+import scalaz.{-\/, \/, \/-}
 
 trait Http1Support extends PipelineBuilder {
 

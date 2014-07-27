@@ -1,4 +1,4 @@
-package org.http4s.blaze.client
+package org.http4s.client.blaze
 
 import java.nio.channels.AsynchronousChannelGroup
 

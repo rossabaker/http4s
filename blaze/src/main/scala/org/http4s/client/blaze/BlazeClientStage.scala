@@ -1,9 +1,9 @@
-package org.http4s.blaze.client
+package org.http4s.client.blaze
 
 import java.nio.ByteBuffer
 
-import org.http4s.{Response, Request}
 import org.http4s.blaze.pipeline.TailStage
+import org.http4s.{Request, Response}
 
 import scalaz.concurrent.Task
 

@@ -1,17 +1,15 @@
-package org.http4s.blaze
-package client
+package org.http4s.client.blaze
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import org.http4s.blaze.pipeline.Command
-import org.http4s.{Response, Request}
 import org.http4s.client.Client
+import org.http4s.{Request, Response}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Try, Failure, Success}
-import scalaz.{\/-, -\/}
-
+import scala.util.{Failure, Success, Try}
 import scalaz.concurrent.Task
 import scalaz.stream.Process.eval_
+import scalaz.{-\/, \/-}
 
 /** Base on which to implement a BlazeClient */
 trait BlazeClient extends PipelineBuilder with Client with LazyLogging {
@@ -34,7 +32,7 @@ trait BlazeClient extends PipelineBuilder with Client with LazyLogging {
 
 
 
-  override def request(req: Request): Task[Response] = Task.async { cb =>
+  override def prepare(req: Request): Task[Response] = Task.async { cb =>
     def tryClient(client: Try[BlazeClientStage], retries: Int): Unit = client match {
       case Success(client) =>
         client.runRequest(req).runAsync {
