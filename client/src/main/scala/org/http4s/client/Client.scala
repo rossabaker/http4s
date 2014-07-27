@@ -34,6 +34,7 @@ trait Client {
 }
 
 object Client {
+  
   case class BadResponse(status: Status, msg: String) extends Exception with NoStackTrace {
     override def getMessage: String = s"Bad Response, $status: '$msg'"
   }
