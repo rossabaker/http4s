@@ -79,9 +79,18 @@ class BlazeHttp1ClientSpec extends Specification with NoTimeConversions {
   "Client syntax" should {
     implicit def client = SimpleHttp1Client
     "be simple to use" in {
-      val resp = Get("http://www.google.com/").onOK(EntityBody.text).run
-      println(resp)
+      val resp = Get("http://www.google.com/").onOK[String].run
+//      println(resp)
 
+      resp.isEmpty must be_==(false)
+    }
+
+    "make a post request" in {
+      val resp = Post("http://httpbin.org/post")
+                    .withbody("hello world")
+                    .onOK[String].run
+
+      println(resp)
       resp.isEmpty must be_==(false)
     }
   }

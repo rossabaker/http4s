@@ -21,7 +21,7 @@ package object client {
       }
     }
 
-    def onOK[T](parser: Response => Task[T])(implicit client: Client): Task[T] =
-      client.request(request, parser)
+    def onOK[T](implicit client: Client, decoder: EntityDecoder[T]): Task[T] =
+      client.request(request, decoder)
   }
 }
