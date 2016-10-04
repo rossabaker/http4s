@@ -7,7 +7,7 @@ import scala.util.control.NoStackTrace
 
 import scalaz.concurrent.Task
 import scalaz.stream.Process
-import scalaz.stream.Process.{eval, eval_}
+import scalaz.stream.Process._
 
 /**
   * Contains a [[Response]] that needs to be disposed of to free the underlying
@@ -73,10 +73,14 @@ final case class Client(open: Service[Request, DisposableResponse], shutdown: Ta
       response.copy(body = response.body.onComplete(eval_(dispose)))
     }
 
+  // TODO needs a better name
+  def streamingP(req: Request): Process[Task, Response] =
+    bracket(open(req))(r => eval_(r.dispose)) {
+      case DisposableResponse(response, dispose) => emit(response)
+    }
+
   def streaming[A](req: Request)(f: Response => Process[Task, A]): Process[Task, A] =
-    eval(open(req).map { case DisposableResponse(response, dispose) =>
-      f(response).onComplete(eval_(dispose))
-    }).flatMap(identity)
+    streamingP(req).flatMap(f)
 
   @deprecated("Use toHttpService.run for compatibility, or fetch for safety", "0.12")
   def prepare(req: Request): Task[Response] =

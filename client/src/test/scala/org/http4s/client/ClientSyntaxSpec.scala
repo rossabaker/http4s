@@ -1,17 +1,15 @@
 package org.http4s
 package client
 
-import org.http4s.Http4sSpec
-import org.http4s.headers.Accept
-import org.http4s.Status.InternalServerError
+import scala.concurrent.duration._
 
-import scalaz.-\/
+import scalaz._, Scalaz._
 import scalaz.concurrent.Task
-import scalaz.stream.Process
+import scalaz.stream.Process._
 
-import org.http4s.Status.{Ok, NotFound, Created, BadRequest}
 import org.http4s.Method._
-
+import org.http4s.Status._
+import org.http4s.headers._
 import org.specs2.matcher.MustThrownMatchers
 
 class ClientSyntaxSpec extends Http4sSpec with MustThrownMatchers {
@@ -36,11 +34,14 @@ class ClientSyntaxSpec extends Http4sSpec with MustThrownMatchers {
 
   object SadTrombone extends Exception("sad trombone")
 
-  def assertDisposes(f: Client => Task[Unit]) = {
-    var disposed = false
-    val disposingClient = MockClient(route, Task.delay(disposed = true))
-    f(disposingClient).attemptRun
-    disposed must beTrue
+  def assertDisposes(f: Client => Task[Unit], runFor: Duration = Duration.Undefined) = {
+    var responseOpen = false
+    val disposingClient = MockClient(
+      route.mapK(resp => Task.delay(responseOpen = true) >> resp),
+      Task.delay(responseOpen = false))
+    if (runFor.isFinite) f(disposingClient).attemptRunFor(runFor)
+    else f(disposingClient).attemptRun
+    responseOpen must beFalse
   }
 
   "Client" should {
@@ -95,6 +96,10 @@ class ClientSyntaxSpec extends Http4sSpec with MustThrownMatchers {
     "fetch disposes of the response on uncaught exception" in {
       assertDisposes(_.fetch(req) { _ => sys.error("Don't do this at home, kids") })
     }
+
+    "fetch disposes of the response when the task is interrupted" in {
+      assertDisposes(_.fetch(req) { _ => Task.async { _ => }}, 1.nanosecond)
+    }.pendingUntilFixed("Task algebra does not support this")
 
     "fetch on task disposes of the response on success" in {
       assertDisposes(_.fetch(Task.now(req)) { _ => Task.now(()) })
@@ -155,7 +160,15 @@ class ClientSyntaxSpec extends Http4sSpec with MustThrownMatchers {
     }
 
     "streaming disposes of the response on failure" in {
-      assertDisposes(_.streaming(req)(_ => Process.fail(SadTrombone).toSource).run)
+      assertDisposes(_.streaming(req)(_ => fail(SadTrombone).toSource).run)
+    }
+
+    "streaming disposes of the response on kill" in {
+      assertDisposes(_.streaming(req)(_.body).kill.run)
+    }
+
+    "streaming disposes of the response when an await is interrupted" in {
+      assertDisposes(_.streaming(req)(_ => eval_(Task.async[String] { _ => })).run, 1.nanosecond)
     }
 
     "toService disposes of the response on success" in {
@@ -171,7 +184,7 @@ class ClientSyntaxSpec extends Http4sSpec with MustThrownMatchers {
     }
 
     "toHttpService disposes of the response if the body is run, even if it fails" in {
-      assertDisposes(_.toHttpService.flatMapK(_.body.flatMap(_ => Process.fail(SadTrombone).toSource).run).run(req))
+      assertDisposes(_.toHttpService.flatMapK(_.body.flatMap(_ => fail(SadTrombone).toSource).run).run(req))
     }
   }
 
