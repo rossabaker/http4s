@@ -12,18 +12,10 @@ class QueueSubscriber[A](bufferSize: Int = 8) extends UnicastSubscriber[A] {
   private val queue =
     boundedQueue[A](bufferSize)
 
-  private val refillProcess =
-    repeatEval {
-      Task.delay {
-        log.trace("Requesting another element")
-        request(1)
-      }
-    }
-
-  final val process: Process[Task, A] =
-    (refillProcess zipWith queue.dequeue)((_, a) => a)
+  final val process: Process[Task, A] = queue.dequeue
 
   def whenNext(element: A): Boolean = {
+    log.info(new String(element.asInstanceOf[org.asynchttpclient.HttpResponseBodyPart].getBodyPartBytes))
     queue.enqueueOne(element).run
     true
   }

@@ -2,12 +2,13 @@ package org.http4s
 package client
 package asynchttpclient
 
-import java.util.concurrent.{Callable, Executors, ExecutorService}
+import java.util.concurrent.{Callable, Executor, Executors, ExecutorService}
 
 import org.asynchttpclient.AsyncHandler.State
 import org.asynchttpclient.request.body.generator.{InputStreamBodyGenerator, BodyGenerator}
 import org.asynchttpclient.{Request => AsyncRequest, Response => _, _}
 import org.asynchttpclient.handler.StreamedAsyncHandler
+import org.reactivestreams.Subscription
 import org.http4s.client.impl.DefaultExecutor
 
 import org.http4s.util.threads._
@@ -17,7 +18,7 @@ import scodec.bits.ByteVector
 
 import scala.collection.JavaConverters._
 
-import scalaz.{-\/, \/-}
+import scalaz.{\/, -\/, \/-}
 import scalaz.stream.io._
 import scalaz.concurrent.Task
 
@@ -55,26 +56,41 @@ object AsyncHttpClient {
         }
 
     Client(Service.lift { req =>
-      Task.async[DisposableResponse] { cb =>
-        client.executeRequest(toAsyncRequest(req), asyncHandler(cb, bufferSize, executorService))
-        ()
-      }
+      client.executeRequest(toAsyncRequest(req), asyncHandler(bufferSize, executorService))
+        .toTask(executorService)
+        .flatMap(_.fold(Task.fail, Task.now))
     }, close)
   }
 
-  private def asyncHandler(callback: Callback[DisposableResponse],
-                           bufferSize: Int,
-                           executorService: ExecutorService): AsyncHandler[Unit] =
-    new StreamedAsyncHandler[Unit] {
+  private implicit class ListenableFutureSyntax[A](val self: ListenableFuture[A]) extends AnyVal {
+    def toTask(executor: Executor): Task[A] =
+      Task.async[A] { cb =>
+        self.addListener(new Runnable {
+          def run() = cb(\/.fromTryCatchThrowable[A, Throwable](self.get))
+        }, executor)
+        ()
+      }
+  }
+
+  private def asyncHandler(bufferSize: Int, executorService: ExecutorService): AsyncHandler[Throwable \/ DisposableResponse] =
+    new StreamedAsyncHandler[Throwable \/ DisposableResponse] {
       var state: State = State.CONTINUE
-      var disposableResponse = DisposableResponse(Response(), Task.delay { state = State.ABORT })
+      var result: Throwable \/ DisposableResponse =
+        \/-(DisposableResponse(Response(), Task.delay { state = State.ABORT }))
 
       override def onStream(publisher: Publisher[HttpResponseBodyPart]): State = {
         val subscriber = new QueueSubscriber[HttpResponseBodyPart](bufferSize) {
+          override def onSubscribe(s: Subscription): Unit = {
+            super.onSubscribe(s)
+            request(bufferSize)
+          }
+
           override def whenNext(element: HttpResponseBodyPart): Boolean = {
             state match {
               case State.CONTINUE =>
-                super.whenNext(element)
+                val more = super.whenNext(element)
+                if (more) request(1)
+                more
               case State.ABORT =>
                 super.whenNext(element)
                 closeQueue()
@@ -95,11 +111,14 @@ object AsyncHttpClient {
             }
         }
         val body = subscriber.process.map(part => ByteVector(part.getBodyPartBytes))
-        val response = disposableResponse.response.copy(body = body)
-        execute(callback(\/-(DisposableResponse(response, Task.delay {
-          state = State.ABORT
-          subscriber.killQueue()
-        }))))
+        result = result.map(dr => dr.copy(
+          response = dr.response.copy(body = body),
+          dispose = Task.apply({
+            log.debug("Disposing")
+            state = State.ABORT
+            subscriber.killQueue()
+          })(executorService)
+        ))
         publisher.subscribe(subscriber)
         state
       }
@@ -108,24 +127,24 @@ object AsyncHttpClient {
         throw org.http4s.util.bug("Expected it to call onStream instead.")
 
       override def onStatusReceived(status: HttpResponseStatus): State = {
-        disposableResponse = disposableResponse.copy(response = disposableResponse.response.copy(status = getStatus(status)))
+        result = result.map(dr => dr.copy(
+          response = dr.response.copy(status = getStatus(status))
+        ))
         state
       }
 
       override def onHeadersReceived(headers: HttpResponseHeaders): State = {
-        disposableResponse = disposableResponse.copy(response = disposableResponse.response.copy(headers = getHeaders(headers)))
+        result = result.map(dr => dr.copy(
+          response = dr.response.copy(headers = getHeaders(headers))
+        ))
         state
       }
 
       override def onThrowable(throwable: Throwable): Unit =
-        execute(callback(-\/(throwable)))
+        result = -\/(throwable)
 
-      override def onCompleted(): Unit = {}
-
-      private def execute(f: => Unit) =
-        executorService.execute(new Runnable {
-          override def run(): Unit = f
-        })
+      override def onCompleted(): Throwable \/ DisposableResponse =
+        result
     }
 
   private def toAsyncRequest(request: Request): AsyncRequest =
