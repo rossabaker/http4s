@@ -15,6 +15,16 @@ object JettyExample extends ServerApp {
     .bindHttp(8080)
     .mountService(ExampleService.service, "/http4s")
     .mountService(metricsService(metrics), "/metrics/*")
+    .mountServlet({
+      import javax.servlet._
+      import javax.servlet.http._
+      new HttpServlet {
+        override def doGet(req: HttpServletRequest, resp: HttpServletResponse) = {
+          resp.getWriter.println("pong")
+          resp.getWriter.close();
+        }
+      }
+    }, "/jetty/*")
     .mountFilter(NoneShallPass, "/http4s/science/black-knight/*")
     .start
 }
