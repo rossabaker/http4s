@@ -31,8 +31,8 @@ trait IONeeds[+A] {
 
 trait IOCompanionNeeds {
   def fromFuture[A](f: => Future[A])(implicit ec: ExecutionContext): IO[A] = ???
-  implicit def schrodingersInstances: fs2.util.Catchable[IO] with fs2.util.Suspendable[IO] = ???
-  implicit def fs2Instances: fs2.util.Async[IO] = ???
+  implicit def schrodingersInstances: schrodinger.Deferrable[IO] = ???
+  implicit def fs2Instances: fs2.util.Catchable[IO] with fs2.util.Async[IO] = ???
   implicit def catsInstances: cats.Monad[IO] = ???
   implicit def monoidInstance[A: cats.Monoid]: cats.Monoid[IO[A]] = ???
 
