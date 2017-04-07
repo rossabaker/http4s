@@ -5,6 +5,7 @@ import java.net.URL
 import java.nio.file.{Path, StandardOpenOption}
 import java.time.Instant
 
+import cats.effect.IO
 import fs2._
 import fs2.Stream._
 import fs2.io._
@@ -42,7 +43,7 @@ object StaticFile {
 
       Some(Response(
         headers = headers,
-        body    = readInputStream[Task](Task.delay(url.openStream), DefaultBufferSize)
+        body    = readInputStream[IO](IO.delay(url.openStream), DefaultBufferSize)
       ))
     } else Some(Response(NotModified))
   }
@@ -118,7 +119,7 @@ object StaticFile {
     def readAll[F[_]: Suspendable](path: Path, chunkSize: Int): Stream[F, Byte] =
       pulls.fromPath(path, List(StandardOpenOption.READ)).flatMap(readAllFromFileHandle(chunkSize, start, end)).close
 
-    readAll[Task](f.toPath, DefaultBufferSize)
+    readAll[IO](f.toPath, DefaultBufferSize)
   }
 
   private[http4s] val staticFileKey = AttributeKey.http4s[File]("staticFile")

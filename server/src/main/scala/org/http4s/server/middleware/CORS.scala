@@ -6,6 +6,7 @@ import Method.OPTIONS
 
 import scala.concurrent.duration._
 
+import cats.effect.IO
 import fs2._
 import org.http4s.batteries._
 import org.http4s.headers._
@@ -70,7 +71,7 @@ object CORS {
     (req.method, req.headers.get(Origin), req.headers.get(`Access-Control-Request-Method`)) match {
       case (OPTIONS, Some(origin), Some(acrm)) if allowCORS(origin, acrm) =>
         logger.debug(s"Serving OPTIONS with CORS headers for ${acrm} ${req.uri}")
-        Task.now(createOptionsResponse(origin, acrm))
+        IO.now(createOptionsResponse(origin, acrm))
       case (_, Some(origin), _) =>
         if (allowCORS(origin, Header("Access-Control-Request-Method", req.method.renderString))) {
           service(req).map {

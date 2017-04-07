@@ -2,6 +2,7 @@ package org.http4s
 package client
 
 import java.util.concurrent.ExecutorService
+import cats.effect.IO
 import org.log4s.getLogger
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -58,7 +59,7 @@ private final class PoolManager[A <: Connection](builder: ConnectionBuilder[A],
   }
 
   /**
-    * This generates a Task of Next Connection. The following calls are executed asynchronously
+    * This generates a IO of Next Connection. The following calls are executed asynchronously
     * with respect to whenever the execution of this task can occur.
     *
     * If the pool is closed The task failure is executed.
@@ -75,9 +76,9 @@ private final class PoolManager[A <: Connection](builder: ConnectionBuilder[A],
     * then the Request is placed in a waitingQueue to be executed when a connection is released.
     *
     * @param key The Request Key For The Connection
-    * @return A Task of NextConnection
+    * @return A IO of NextConnection
     */
-   def borrow(key: RequestKey): Task[NextConnection] = Task.async{ callback =>
+   def borrow(key: RequestKey): IO[NextConnection] = IO.async{ callback =>
      logger.debug(s"Requesting connection: ${stats}")
      synchronized {
        if (!isClosed) {
@@ -134,9 +135,9 @@ private final class PoolManager[A <: Connection](builder: ConnectionBuilder[A],
     * Otherwise the pool is shrunk.
     *
     * @param connection The connection to be released.
-    * @return A Task of Unit
+    * @return A IO of Unit
     */
-  def release(connection: A): Task[Unit] = Task.delay {
+  def release(connection: A): IO[Unit] = IO.delay {
     synchronized {
       if (!isClosed) {
         logger.debug(s"Recycling connection: ${stats}")
@@ -185,13 +186,13 @@ private final class PoolManager[A <: Connection](builder: ConnectionBuilder[A],
 
   /**
     * This invalidates a Connection. This is what is exposed externally, and
-    * is just a Task wrapper around disposing the connection.
+    * is just a IO wrapper around disposing the connection.
     *
     * @param connection The connection to invalidate
-    * @return A Task of Unit
+    * @return A IO of Unit
     */
-  override def invalidate(connection: A): Task[Unit] =
-    Task.delay(disposeConnection(connection.requestKey, Some(connection)))
+  override def invalidate(connection: A): IO[Unit] =
+    IO.delay(disposeConnection(connection.requestKey, Some(connection)))
 
   /**
     * Synchronous Immediate Disposal of a Connection and Its Resources.
@@ -215,9 +216,9 @@ private final class PoolManager[A <: Connection](builder: ConnectionBuilder[A],
     * Changes isClosed to true, no methods can reopen a closed Pool.
     * Shutdowns all connections in the IdleQueue and Sets Allocated to Zero
     *
-    * @return A Task Of Unit
+    * @return A IO Of Unit
     */
-  def shutdown() : Task[Unit] = Task.delay {
+  def shutdown() : IO[Unit] = IO.delay {
     logger.info(s"Shutting down connection pool: ${stats}")
     synchronized {
       if (!isClosed) {

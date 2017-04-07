@@ -4,6 +4,7 @@ import java.time.{ZoneOffset, Instant}
 
 import cats._
 import cats.data._
+import cats.effect.IO
 import fs2._
 import org.http4s.batteries._
 import org.http4s.headers._
@@ -68,14 +69,14 @@ trait MessageOps extends Any {
   final def putHeaders(headers: Header*): Self =
     transformHeaders(_.put(headers: _*))
 
-  final def withTrailerHeaders(trailerHeaders: Task[Headers]): Self =
+  final def withTrailerHeaders(trailerHeaders: IO[Headers]): Self =
     withAttribute(Message.Keys.TrailerHeaders, trailerHeaders)
 
   /** Decode the [[Message]] to the specified type
     *
     * @param decoder [[EntityDecoder]] used to decode the [[Message]]
     * @tparam T type of the result
-    * @return the `Task` which will generate the `DecodeResult[T]`
+    * @return the `IO` which will generate the `DecodeResult[T]`
     */
   def attemptAs[T](implicit decoder: EntityDecoder[T]): DecodeResult[T]
 
@@ -84,9 +85,9 @@ trait MessageOps extends Any {
     * If no valid [[Status]] has been described, allow Ok
     * @param decoder [[EntityDecoder]] used to decode the [[Message]]
     * @tparam T type of the result
-    * @return the `Task` which will generate the T
+    * @return the `IO` which will generate the T
     */
-  final def as[T](implicit decoder: EntityDecoder[T]): Task[T] =
+  final def as[T](implicit decoder: EntityDecoder[T]): IO[T] =
     attemptAs(decoder).fold(throw _, identity)
 }
 
@@ -98,7 +99,7 @@ trait RequestOps extends Any with MessageOps {
     * Attempt to decode the [[Request]] and, if successful, execute the continuation to get a [[Response]].
     * If decoding fails, an `UnprocessableEntity` [[Response]] is generated.
     */
-  final def decode[A](f: A => Task[Response])(implicit decoder: EntityDecoder[A]): Task[Response] =
+  final def decode[A](f: A => IO[Response])(implicit decoder: EntityDecoder[A]): IO[Response] =
     decodeWith(decoder, strict = false)(f)
 
   /** Helper method for decoding [[Request]]s
@@ -107,14 +108,14 @@ trait RequestOps extends Any with MessageOps {
     * If decoding fails, an `UnprocessableEntity` [[Response]] is generated. If the decoder does not support the
     * [[MediaType]] of the [[Request]], a `UnsupportedMediaType` [[Response]] is generated instead.
     */
-  final def decodeStrict[A](f: A => Task[Response])(implicit decoder: EntityDecoder[A]): Task[Response] =
+  final def decodeStrict[A](f: A => IO[Response])(implicit decoder: EntityDecoder[A]): IO[Response] =
     decodeWith(decoder, true)(f)
 
   /** Like [[decode]], but with an explicit decoder.
     * @param strict If strict, will return a [[Status.UnsupportedMediaType]] http Response if this message's
     *               [[MediaType]] is not supported by the provided decoder
     */
-  def decodeWith[A](decoder: EntityDecoder[A], strict: Boolean)(f: A => Task[Response]): Task[Response]
+  def decodeWith[A](decoder: EntityDecoder[A], strict: Boolean)(f: A => IO[Response]): IO[Response]
 
   /** Add a Cookie header for the provided [[Cookie]] */
   final def addCookie(cookie: Cookie): Self =

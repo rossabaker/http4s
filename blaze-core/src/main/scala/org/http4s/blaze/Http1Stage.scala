@@ -9,6 +9,7 @@ import scala.concurrent.{Future, ExecutionContext, Promise}
 import scala.util.{Failure, Success}
 
 import cats.data._
+import cats.effect.IO
 import fs2._
 import fs2.Stream._
 import org.http4s.headers._
@@ -70,7 +71,7 @@ trait Http1Stage { self: TailStage[ByteBuffer] =>
   final protected def getEncoder(connectionHeader: Option[Connection],
                                      bodyEncoding: Option[`Transfer-Encoding`],
                                      lengthHeader: Option[`Content-Length`],
-                                          trailer: Task[Headers],
+                                          trailer: IO[Headers],
                                                rr: StringWriter,
                                             minor: Int,
                                     closeOnFinish: Boolean): EntityBodyWriter = lengthHeader match {
@@ -157,7 +158,7 @@ trait Http1Stage { self: TailStage[ByteBuffer] =>
     @volatile var currentBuffer = buffer
 
     // TODO: we need to work trailers into here somehow
-    val t = Task.async[Option[Chunk[Byte]]]{ cb =>
+    val t = IO.async[Option[Chunk[Byte]]]{ cb =>
       if (!contentComplete()) {
 
         def go(): Unit = try {

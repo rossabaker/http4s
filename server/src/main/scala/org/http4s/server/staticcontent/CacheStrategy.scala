@@ -2,7 +2,7 @@ package org.http4s
 package server
 package staticcontent
 
-import fs2._
+import cats.effect.IO
 
 /** Cache the body of a [[Response]] for future use
   *
@@ -12,5 +12,5 @@ import fs2._
   */
 trait CacheStrategy {
   /** Performs the caching operations */
-  def cache(uriPath: String, resp: Response): Task[Response]
+  def cache(uriPath: String, resp: Response): IO[Response]
 }

@@ -2,15 +2,15 @@ package org.http4s
 package server
 package middleware
 
-import fs2.Task
+import cats.effect.IO
 import org.http4s.batteries._
 import org.log4s.getLogger
 
 object PushSupport {
   private[this] val logger = getLogger
 
-  implicit class PushOps(response: Task[Response]) {
-    def push(url: String, cascade: Boolean = true)(implicit req: Request): Task[Response] = response.map { response =>
+  implicit class PushOps(response: IO[Response]) {
+    def push(url: String, cascade: Boolean = true)(implicit req: Request): IO[Response] = response.map { response =>
       val newUrl = {
         val script = req.scriptName
         if (script.length > 0) {
@@ -42,8 +42,8 @@ object PushSupport {
   private def locToRequest(push: PushLocation, req: Request): Request =
     req.withPathInfo(push.location)
 
-  private def collectResponse(r: Vector[PushLocation], req: Request, verify: String => Boolean, route: HttpService): Task[Vector[PushResponse]] =
-    r.foldLeft(Task.now(Vector.empty[PushResponse])){ (facc, v) =>
+  private def collectResponse(r: Vector[PushLocation], req: Request, verify: String => Boolean, route: HttpService): IO[Vector[PushResponse]] =
+    r.foldLeft(IO.now(Vector.empty[PushResponse])){ (facc, v) =>
       if (verify(v.location)) {
         val newReq = locToRequest(v, req)
         if (v.cascade) facc.flatMap { accumulated => // Need to gather the sub resources
@@ -52,8 +52,8 @@ object PushSupport {
               response.attributes.get(pushLocationKey).map { pushed =>
                 collectResponse(pushed, req, verify, route)
                   .map(accumulated ++ _ :+ PushResponse(v.location, response))
-              }.getOrElse(Task.now(accumulated:+PushResponse(v.location, response)))
-            case Pass => Task.now(Vector.empty)
+              }.getOrElse(IO.now(accumulated:+PushResponse(v.location, response)))
+            case Pass => IO.now(Vector.empty)
           }.apply(newReq)
           catch { case t: Throwable => handleException(t); facc }
         } else {
@@ -77,7 +77,7 @@ object PushSupport {
 
     def gather(req: Request, resp: Response): Response = {
       resp.attributes.get(pushLocationKey).map { fresource =>
-        val collected: Task[Vector[PushResponse]] = collectResponse(fresource, req, verify, service)
+        val collected: IO[Vector[PushResponse]] = collectResponse(fresource, req, verify, service)
         resp.copy(
           body = resp.body,
           attributes = resp.attributes.put(pushResponsesKey, collected)
@@ -92,6 +92,6 @@ object PushSupport {
   private [http4s] final case class PushResponse(location: String, resp: Response)
 
   private[PushSupport] val pushLocationKey = AttributeKey.http4s[Vector[PushLocation]]("pushLocation")
-  private[http4s] val pushResponsesKey = AttributeKey.http4s[Task[Vector[PushResponse]]]("pushResponses")
+  private[http4s] val pushResponsesKey = AttributeKey.http4s[IO[Vector[PushResponse]]]("pushResponses")
 }
 

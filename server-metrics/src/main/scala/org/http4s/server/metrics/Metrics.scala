@@ -4,9 +4,10 @@ package metrics
 
 import java.util.concurrent.TimeUnit
 
+import cats.effect.IO
 import cats.syntax.either._
+import fs2.Stream
 import fs2.util.Attempt
-import fs2.{Stream, Task}
 import com.codahale.metrics.MetricRegistry
 
 object Metrics {
@@ -62,8 +63,8 @@ object Metrics {
         headers_times.update(System.nanoTime() - start, TimeUnit.NANOSECONDS)
         val code = r.cata(_.status, Status.NotFound).code
 
-        def capture(r: Response) = r.body.onFinalize[Task] {
-          Task.delay {
+        def capture(r: Response) = r.body.onFinalize[IO] {
+          IO.delay {
             generalMetrics(method, elapsed)
             if (code < 200) resp1xx.update(elapsed, TimeUnit.NANOSECONDS)
             else if (code < 300) resp2xx.update(elapsed, TimeUnit.NANOSECONDS)
@@ -87,7 +88,7 @@ object Metrics {
     Service.lift { req: Request =>
       val now = System.nanoTime()
       active_requests.inc()
-      service(req).attempt.flatMap(onFinish(req.method, now)(_).fold(Task.fail, Task.now))
+      service(req).attempt.flatMap(onFinish(req.method, now)(_).fold(IO.fail, IO.now))
     }
   }
 }

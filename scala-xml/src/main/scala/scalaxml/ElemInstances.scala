@@ -3,8 +3,8 @@ package scalaxml
 
 import java.io.StringReader
 
+import cats.effect.IO
 import fs2.interop.cats._
-import fs2.Task
 import headers.`Content-Type`
 
 import scala.util.control.NonFatal
@@ -29,11 +29,11 @@ trait ElemInstances {
     decodeBy(MediaType.`text/xml`, MediaType.`text/html`, MediaType.`application/xml`){ msg =>
       collectBinary(msg).flatMap[DecodeFailure, Elem] { arr =>
         val source = new InputSource(new StringReader(new String(arr.toArray, msg.charset.getOrElse(Charset.`US-ASCII`).nioCharset)))
-        try DecodeResult.success(Task.now(XML.loadXML(source, parser)))
+        try DecodeResult.success(IO.now(XML.loadXML(source, parser)))
         catch {
           case e: SAXParseException =>
             DecodeResult.failure(MalformedMessageBodyFailure("Invalid XML", Some(e)))
-          case NonFatal(e) => DecodeResult(Task.fail(e))
+          case NonFatal(e) => DecodeResult(IO.fail(e))
         }
       }
     }

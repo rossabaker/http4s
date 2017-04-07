@@ -8,6 +8,7 @@ import scala.annotation.implicitNotFound
 import scala.concurrent.{ExecutionContext, Future}
 
 import cats._
+import cats.effect.IO
 import cats.functor._
 import fs2._
 import fs2.io._
@@ -20,8 +21,8 @@ import org.http4s.multipart._
 trait EntityEncoder[A] { self =>
   import EntityEncoder._
 
-  /** Convert the type `A` to an [[EntityEncoder.Entity]] in the `Task` monad */
-  def toEntity(a: A): Task[Entity]
+  /** Convert the type `A` to an [[EntityEncoder.Entity]] in the `IO` monad */
+  def toEntity(a: A): IO[Entity]
 
   /** Headers that may be added to a [[Message]]
     *
@@ -32,7 +33,7 @@ trait EntityEncoder[A] { self =>
 
   /** Make a new [[EntityEncoder]] using this type as a foundation */
   def contramap[B](f: B => A): EntityEncoder[B] = new EntityEncoder[B] {
-    override def toEntity(a: B): Task[Entity] = self.toEntity(f(a))
+    override def toEntity(a: B): IO[Entity] = self.toEntity(f(a))
     override def headers: Headers = self.headers
   }
 
@@ -44,7 +45,7 @@ trait EntityEncoder[A] { self =>
 
   /** Generate a new EntityEncoder that will contain the `Content-Type` header */
   def withContentType(tpe: `Content-Type`): EntityEncoder[A] = new EntityEncoder[A] {
-      override def toEntity(a: A): Task[Entity] = self.toEntity(a)
+      override def toEntity(a: A): IO[Entity] = self.toEntity(a)
       override val headers: Headers = self.headers.put(tpe)
     }
 }
@@ -55,13 +56,13 @@ object EntityEncoder extends EntityEncoderInstances {
   def apply[A](implicit ev: EntityEncoder[A]): EntityEncoder[A] = ev
 
   /** Create a new [[EntityEncoder]] */
-  def encodeBy[A](hs: Headers)(f: A => Task[Entity]): EntityEncoder[A] = new EntityEncoder[A] {
-    override def toEntity(a: A): Task[Entity] = f(a)
+  def encodeBy[A](hs: Headers)(f: A => IO[Entity]): EntityEncoder[A] = new EntityEncoder[A] {
+    override def toEntity(a: A): IO[Entity] = f(a)
     override def headers: Headers = hs
   }
 
   /** Create a new [[EntityEncoder]] */
-  def encodeBy[A](hs: Header*)(f: A => Task[Entity]): EntityEncoder[A] = {
+  def encodeBy[A](hs: Header*)(f: A => IO[Entity]): EntityEncoder[A] = {
     val hdrs = if(hs.nonEmpty) Headers(hs.toList) else Headers.empty
     encodeBy(hdrs)(f)
   }
@@ -73,7 +74,7 @@ object EntityEncoder extends EntityEncoderInstances {
   def simple[A](hs: Header*)(toChunk: A => Chunk[Byte]): EntityEncoder[A] =
     encodeBy(hs:_*) { a =>
       val c = toChunk(a)
-      Task.now(Entity(chunk(c), Some(c.size.toLong)))
+      IO.now(Entity(chunk(c), Some(c.size.toLong)))
     }
 }
 
@@ -87,19 +88,19 @@ trait EntityEncoderInstances0 {
   }
 
   def emptyEncoder[A]: EntityEncoder[A] = new EntityEncoder[A] {
-    def toEntity(a: A): Task[Entity] = Task.now(Entity.empty)
+    def toEntity(a: A): IO[Entity] = IO.now(Entity.empty)
     def headers: Headers = Headers.empty
   }
 
   implicit def futureEncoder[A](implicit W: EntityEncoder[A], ec: ExecutionContext): EntityEncoder[Future[A]] =
     new EntityEncoder[Future[A]] {
       implicit val strategy : Strategy = Strategy.fromExecutionContext(ec)
-      override def toEntity(a: Future[A]): Task[Entity] = Task.fromFuture(a).flatMap(W.toEntity)
+      override def toEntity(a: Future[A]): IO[Entity] = IO.fromFuture(a).flatMap(W.toEntity)
       override def headers: Headers = W.headers
     }
 
 
-  implicit def naturalTransformationEncoder[F[_], A](implicit N: ~>[F, Task], W: EntityEncoder[A]): EntityEncoder[F[A]] =
+  implicit def naturalTransformationEncoder[F[_], A](implicit N: ~>[F, IO], W: EntityEncoder[A]): EntityEncoder[F[A]] =
     taskEncoder[A](W).contramap { f: F[A] => N(f) }
 
   /**
@@ -107,10 +108,10 @@ trait EntityEncoderInstances0 {
    * bodies in advance.  As such, it does not calculate the Content-Length in
    * advance.  This is for use with chunked transfer encoding.
    */
-  implicit def sourceEncoder[A](implicit W: EntityEncoder[A]): EntityEncoder[Stream[Task, A]] =
-    new EntityEncoder[Stream[Task, A]] {
-      override def toEntity(a: Stream[Task, A]): Task[Entity] =
-        Task.now(Entity(a.evalMap(W.toEntity).flatMap(_.body)))
+  implicit def sourceEncoder[A](implicit W: EntityEncoder[A]): EntityEncoder[Stream[IO, A]] =
+    new EntityEncoder[Stream[IO, A]] {
+      override def toEntity(a: Stream[IO, A]): IO[Entity] =
+        IO.now(Entity(a.evalMap(W.toEntity).flatMap(_.body)))
 
       override def headers: Headers =
         W.headers.get(`Transfer-Encoding`) match {
@@ -122,7 +123,7 @@ trait EntityEncoderInstances0 {
     }
 
   implicit def pureStreamEncoder[A](implicit W: EntityEncoder[A]): EntityEncoder[Stream[Nothing, A]] =
-    sourceEncoder[A].contramap(_.covary[Task])
+    sourceEncoder[A].contramap(_.covary[IO])
 }
 
 trait EntityEncoderInstances extends EntityEncoderInstances0 {
@@ -151,8 +152,8 @@ trait EntityEncoderInstances extends EntityEncoderInstances0 {
   implicit val byteEncoder: EntityEncoder[Byte] =
     chunkEncoder.contramap(Chunk.singleton)
 
-  implicit def taskEncoder[A](implicit W: EntityEncoder[A]): EntityEncoder[Task[A]] = new EntityEncoder[Task[A]] {
-    override def toEntity(a: Task[A]): Task[Entity] = a.flatMap(W.toEntity)
+  implicit def taskEncoder[A](implicit W: EntityEncoder[A]): EntityEncoder[IO[A]] = new EntityEncoder[IO[A]] {
+    override def toEntity(a: IO[A]): IO[Entity] = a.flatMap(W.toEntity)
     override def headers: Headers = W.headers
   }
 
@@ -169,16 +170,16 @@ trait EntityEncoderInstances extends EntityEncoderInstances0 {
   // TODO parameterize chunk size
   implicit def inputStreamEncoder[A <: InputStream]: EntityEncoder[Eval[A]] =
     sourceEncoder[Byte].contramap { in: Eval[A] =>
-      readInputStream[Task](Task.delay(in.value), DefaultChunkSize)
+      readInputStream[IO](IO.delay(in.value), DefaultChunkSize)
     }
 
   // TODO parameterize chunk size
-  implicit def readerEncoder[A <: Reader](implicit charset: Charset = DefaultCharset): EntityEncoder[Task[A]] =
-    sourceEncoder[Byte].contramap { r: Task[Reader] =>
+  implicit def readerEncoder[A <: Reader](implicit charset: Charset = DefaultCharset): EntityEncoder[IO[A]] =
+    sourceEncoder[Byte].contramap { r: IO[Reader] =>
 
       // Shared buffer
       val charBuffer = CharBuffer.allocate(DefaultChunkSize)
-      val readToBytes: Task[Option[Chunk[Byte]]] = r.map { r =>
+      val readToBytes: IO[Option[Chunk[Byte]]] = r.map { r =>
         // Read into the buffer
         val readChars = r.read(charBuffer)
 
@@ -204,7 +205,7 @@ trait EntityEncoderInstances extends EntityEncoderInstances0 {
           .flatMap(Stream.chunk)
 
       // The reader is closed at the end like InputStream
-      Stream.bracket(r)(useReader, t => Task.delay(t.close()))
+      Stream.bracket(r)(useReader, t => IO.delay(t.close()))
     }
 
   // TODO fs2 port

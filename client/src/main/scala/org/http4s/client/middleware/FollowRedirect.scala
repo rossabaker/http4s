@@ -2,6 +2,7 @@ package org.http4s
 package client
 package middleware
 
+import cats.effect.IO
 import org.http4s.Method._
 import org.http4s.headers._
 import org.http4s.syntax.string._
@@ -45,7 +46,7 @@ object FollowRedirect {
   )
 
   def apply(maxRedirects: Int)(client: Client): Client = {
-    def prepareLoop(req: Request, redirects: Int): Task[DisposableResponse] = {
+    def prepareLoop(req: Request, redirects: Int): IO[DisposableResponse] = {
       client.open(req).flatMap { case dr @ DisposableResponse(resp, dispose) =>
         def redirectUri =
           resp.headers.get(Location).map { loc =>
@@ -59,7 +60,7 @@ object FollowRedirect {
           }
 
         // We can only resubmit a body if it was not effectful.
-        def pureBody: Option[Stream[Task,Byte]] = {
+        def pureBody: Option[Stream[IO,Byte]] = {
 
           // We Are Propogating The Stream
           Some(req.body)
@@ -69,10 +70,10 @@ object FollowRedirect {
 
         }
 
-        def dontRedirect : Task[DisposableResponse] =
-          Task.now(dr)
+        def dontRedirect : IO[DisposableResponse] =
+          IO.now(dr)
 
-        def nextRequest(method: Method, nextUri: Uri, bodyOpt: Option[Stream[Task,Byte]]) =
+        def nextRequest(method: Method, nextUri: Uri, bodyOpt: Option[Stream[IO,Byte]]) =
           bodyOpt match {
             case Some(body) =>
               // Assume that all the headers can be propagated
@@ -86,7 +87,7 @@ object FollowRedirect {
                 headers = req.headers.filterNot(h => PayloadHeaderKeys(h.name)))
           }
 
-        def doRedirect(method: Method): Task[DisposableResponse] = {
+        def doRedirect(method: Method): IO[DisposableResponse] = {
           if (redirects < maxRedirects) {
             // If we get a redirect response without a location, then there is
             // nothing to redirect.
@@ -145,7 +146,7 @@ object FollowRedirect {
             doRedirect(req.method)
 
           case _ =>
-            Task.now(dr)
+            IO.now(dr)
         }
       }
     }

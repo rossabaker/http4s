@@ -2,6 +2,7 @@ package org.http4s
 package blaze
 package util
 
+import cats.effect.IO
 import scala.concurrent._
 import scala.util._
 import fs2._
@@ -38,17 +39,17 @@ trait EntityBodyWriter {
   /** Called in the event of an Await failure to alert the pipeline to cleanup */
   protected def exceptionFlush(): Future[Unit] = Future.successful(())
 
-  /** Creates a Task that writes the contents of the EntityBody to the output.
-    * Cancelled exceptions fall through to the Task cb
+  /** Creates a IO that writes the contents of the EntityBody to the output.
+    * Cancelled exceptions fall through to the IO cb
     * The writeBodyEnd triggers if there are no exceptions, and the result will
     * be the result of the writeEnd call.
     *
     * @param p EntityBody to write out
-    * @return the Task which when run will unwind the Process
+    * @return the IO which when run will unwind the Process
     */
-  def writeEntityBody(p: EntityBody): Task[Boolean] = {
-    val writeBody : Task[Unit] = (p to writeSink).run
-    val writeBodyEnd : Task[Boolean] = Task.fromFuture(writeEnd(Chunk.empty))
+  def writeEntityBody(p: EntityBody): IO[Boolean] = {
+    val writeBody : IO[Unit] = (p to writeSink).run
+    val writeBodyEnd : IO[Boolean] = IO.fromFuture(writeEnd(Chunk.empty))
     writeBody >> writeBodyEnd
   }
   
@@ -57,11 +58,11 @@ trait EntityBodyWriter {
     * If it errors the error stream becomes the stream, which performs an
     * exception flush and then the stream fails.
     */
-  private val writeSink: Sink[Task, Byte] = { s =>
-    val writeStream : Stream[Task, Unit] = s.chunks.evalMap[Task, Task, Unit](chunk =>
-      Task.fromFuture(writeBodyChunk(chunk , false)))
-    val errorStream : Throwable => Stream[Task, Unit] = e =>
-      Stream.eval(Task.fromFuture(exceptionFlush())).flatMap{_ => fail(e)}
+  private val writeSink: Sink[IO, Byte] = { s =>
+    val writeStream : Stream[IO, Unit] = s.chunks.evalMap[IO, IO, Unit](chunk =>
+      IO.fromFuture(writeBodyChunk(chunk , false)))
+    val errorStream : Throwable => Stream[IO, Unit] = e =>
+      Stream.eval(IO.fromFuture(exceptionFlush())).flatMap{_ => fail(e)}
     writeStream.onError(errorStream)
   }
 }

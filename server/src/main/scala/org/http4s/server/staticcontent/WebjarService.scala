@@ -2,7 +2,7 @@ package org.http4s
 package server
 package staticcontent
 
-import fs2.Task
+import cats.effect.IO
 
 /**
   * Constructs new services to serve assets from Webjars
@@ -97,7 +97,7 @@ object WebjarService {
     * @param request The Request
     * @return Either the the Asset, if it exist, or Pass
     */
-  private def serveWebjarAsset(config: Config, request: Request)(webjarAsset: WebjarAsset): Task[MaybeResponse] =
+  private def serveWebjarAsset(config: Config, request: Request)(webjarAsset: WebjarAsset): IO[MaybeResponse] =
     StaticFile
       .fromResource(webjarAsset.pathInJar, Some(request))
       .fold(Pass.now)(config.cacheStrategy.cache(request.pathInfo, _))

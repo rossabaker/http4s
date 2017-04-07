@@ -4,6 +4,7 @@ package staticcontent
 
 import java.util.concurrent.ConcurrentHashMap
 
+import cats.effect.IO
 import fs2._
 import fs2.Stream._
 import org.http4s.batteries._
@@ -18,24 +19,24 @@ class MemoryCache extends CacheStrategy {
   private val logger = getLogger
   private val cacheMap = new ConcurrentHashMap[String, Response]()
 
-  override def cache(uriPath: String, resp: Response): Task[Response] = {
+  override def cache(uriPath: String, resp: Response): IO[Response] = {
     if (resp.status == Status.Ok) {
       Option(cacheMap.get(uriPath)) match {
         case Some(r) if r.headers.toList == resp.headers.toList =>
           logger.debug(s"Cache hit: $resp")
-          Task.now(r)
+          IO.now(r)
 
         case _ =>
           logger.debug(s"Cache miss: $resp")
           collectResource(uriPath, resp) /* otherwise cache the response */
       }
     }
-    else Task.now(resp)
+    else IO.now(resp)
   }
 
   ////////////// private methods //////////////////////////////////////////////
 
-  private def collectResource(path: String, resp: Response): Task[Response] = {
+  private def collectResource(path: String, resp: Response): IO[Response] = {
     resp.body.chunks.runFoldMap[Chunk[Byte]](identity)
       .map { bytes =>
         val newResponse = resp.copy(body = chunk(bytes))

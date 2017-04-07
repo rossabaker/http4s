@@ -14,7 +14,8 @@ import org.http4s.blaze.pipeline.stages.SSLStage
 import org.http4s.syntax.string._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import fs2.{Strategy, Task}
+import cats.effect.IO
+import fs2.Strategy
 import cats.syntax.either._
 
 private object Http1Support {
@@ -43,9 +44,9 @@ final private class Http1Support(config: BlazeClientConfig, executor: ExecutorSe
 
 ////////////////////////////////////////////////////
 
-  def makeClient(requestKey: RequestKey): Task[BlazeConnection] = getAddress(requestKey) match {
-    case Right(a) => Task.fromFuture(buildPipeline(requestKey, a))(strategy, ec)
-    case Left(t) => Task.fail(t)
+  def makeClient(requestKey: RequestKey): IO[BlazeConnection] = getAddress(requestKey) match {
+    case Right(a) => IO.fromFuture(buildPipeline(requestKey, a))(ec)
+    case Left(t) => IO.fail(t)
   }
 
   private def buildPipeline(requestKey: RequestKey, addr: InetSocketAddress): Future[BlazeConnection] = {

@@ -1,7 +1,7 @@
 package org.http4s
 package syntax
 
-import fs2.Task
+import cats.effect.IO
 
 trait ServiceSyntax {
   implicit def http4sServiceSyntax[A, B](service: Service[A, B]): ServiceOps[A, B] =
@@ -9,6 +9,6 @@ trait ServiceSyntax {
 }
 
 final class ServiceOps[A, B](self: Service[A, B]) {
-  def orNotFound(a: A)(implicit ev: B <:< MaybeResponse): Task[Response] =
+  def orNotFound(a: A)(implicit ev: B <:< MaybeResponse): IO[Response] =
     self.run(a).map(_.orNotFound)
 }

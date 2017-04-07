@@ -6,8 +6,8 @@ import scala.concurrent.duration._
 import scala.math.{pow, min, random}
 import org.http4s.Status._
 import org.log4s.getLogger
-import fs2.Task
 
+import cats.effect.IO
 import scala.Either
 import scala.Right
 import scala.Left
@@ -26,7 +26,7 @@ object Retry {
   )
 
   def apply(backoff: Int => Option[FiniteDuration])(client: Client): Client = {
-    def prepareLoop(req: Request, attempts: Int): Task[DisposableResponse] = {
+    def prepareLoop(req: Request, attempts: Int): IO[DisposableResponse] = {
       client.open(req).attempt flatMap {
         // TODO fs2 port - Reimplement request isIdempotent in some form
         case Right(dr @ DisposableResponse(Response(status, _, _, _, _), _)) if RetriableStatuses(status) =>
@@ -36,10 +36,10 @@ object Retry {
               dr.dispose.flatMap(_ => nextAttempt(req, attempts, duration))
             case None =>
               logger.info(s"Request ${req} has failed on attempt #${attempts} with reason ${status}. Giving up.")
-              Task.now(dr)
+              IO.now(dr)
           }
         case Right(dr) =>
-          Task.now(dr)
+          IO.now(dr)
         case Left(e) =>
           backoff(attempts) match {
             case Some(duration) =>
@@ -48,16 +48,16 @@ object Retry {
             case None =>
               // info instead of error(e), because e is not discarded
               logger.info(s"Request ${req} threw an exception on attempt #${attempts} attempts. Giving up.")
-              Task.fail(e)
+              IO.fail(e)
           }
       }
     }
 
-    def nextAttempt(req: Request, attempts: Int, duration: FiniteDuration): Task[DisposableResponse] = {
+    def nextAttempt(req: Request, attempts: Int, duration: FiniteDuration): IO[DisposableResponse] = {
         prepareLoop(req.copy(body = EmptyBody), attempts + 1)
     }
       // TODO honor Retry-After header
-      // Task.async { (prepareLoop(req.copy(body = EmptyBody), attempts + 1)) }
+      // IO.async { (prepareLoop(req.copy(body = EmptyBody), attempts + 1)) }
 
     client.copy(open = Service.lift(prepareLoop(_, 1)))
   }

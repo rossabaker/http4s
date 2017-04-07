@@ -10,6 +10,7 @@ import java.util.Date
 import scala.concurrent.duration._
 
 import cats.data._
+import cats.effect.IO
 import fs2._
 import org.http4s.batteries._
 import org.http4s.headers._
@@ -23,7 +24,7 @@ object DigestAuth {
    * None if no user exists.  Requires that the server can recover
    * the password in clear text, which is _strongly_ discouraged.
    */
-  type AuthenticationStore[A] = String => Task[Option[(A, String)]]
+  type AuthenticationStore[A] = String => IO[Option[(A, String)]]
 
   private trait AuthReply[+A]
   private final case class OK[A](authInfo: A) extends AuthReply[A]
@@ -66,23 +67,23 @@ object DigestAuth {
       def paramsToChallenge(params: Map[String, String]) = left(Challenge("Digest", realm, params))
 
       checkAuth(realm, store, nonceKeeper, req).flatMap(_ match {
-        case OK(authInfo) => Task.now(right(AuthedRequest(authInfo, req)))
+        case OK(authInfo) => IO.now(right(AuthedRequest(authInfo, req)))
         case StaleNonce => getChallengeParams(nonceKeeper, true).map(paramsToChallenge)
         case _ => getChallengeParams(nonceKeeper, false).map(paramsToChallenge)
       })
     }
   }
 
-  private def checkAuth[A](realm: String, store: AuthenticationStore[A], nonceKeeper: NonceKeeper, req: Request): Task[AuthReply[A]] = req.headers.get(Authorization) match {
+  private def checkAuth[A](realm: String, store: AuthenticationStore[A], nonceKeeper: NonceKeeper, req: Request): IO[AuthReply[A]] = req.headers.get(Authorization) match {
     case Some(Authorization(GenericCredentials(AuthScheme.Digest, params))) =>
       checkAuthParams(realm, store, nonceKeeper, req, params)
     case Some(Authorization(_)) =>
-      Task.now(NoCredentials)
+      IO.now(NoCredentials)
     case None =>
-      Task.now(NoAuthorizationHeader)
+      IO.now(NoAuthorizationHeader)
   }
 
-  private def getChallengeParams(nonceKeeper: NonceKeeper, staleNonce: Boolean): Task[Map[String, String]] = Task.delay {
+  private def getChallengeParams(nonceKeeper: NonceKeeper, staleNonce: Boolean): IO[Map[String, String]] = IO.delay {
     val nonce = nonceKeeper.newNonce()
     val m = Map("qop" -> "auth", "nonce" -> nonce)
     if (staleNonce)
@@ -91,21 +92,21 @@ object DigestAuth {
       m
   }
 
-  private def checkAuthParams[A](realm: String, store: AuthenticationStore[A], nonceKeeper: NonceKeeper, req: Request, params: Map[String, String]): Task[AuthReply[A]] = {
+  private def checkAuthParams[A](realm: String, store: AuthenticationStore[A], nonceKeeper: NonceKeeper, req: Request, params: Map[String, String]): IO[AuthReply[A]] = {
     if (!(Set("realm", "nonce", "nc", "username", "cnonce", "qop") subsetOf params.keySet))
-      return Task.now(BadParameters)
+      return IO.now(BadParameters)
 
     val method = req.method.toString
     val uri = req.uri.toString
 
     if (params.get("realm") != Some(realm))
-      return Task.now(BadParameters)
+      return IO.now(BadParameters)
 
     val nonce = params("nonce")
     val nc = params("nc")
     nonceKeeper.receiveNonce(nonce, Integer.parseInt(nc, 16)) match {
-      case NonceKeeper.StaleReply => Task.now(StaleNonce)
-      case NonceKeeper.BadNCReply => Task.now(BadNC)
+      case NonceKeeper.StaleReply => IO.now(StaleNonce)
+      case NonceKeeper.BadNCReply => IO.now(BadNC)
       case NonceKeeper.OKReply =>
         store(params("username")).map {
           case None => UserUnknown

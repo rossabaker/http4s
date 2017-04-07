@@ -11,6 +11,7 @@ import scala.concurrent.duration.Duration
 import scala.util._
 
 import cats.data._
+import cats.effect.IO
 import fs2._
 import fs2.Stream._
 import org.http4s.{Method => HMethod, Headers => HHeaders, _}
@@ -72,7 +73,7 @@ private class Http2NodeStage(streamId: Int,
     var complete = false
     var bytesRead = 0L
 
-    val t = Task.async[Option[Chunk[Byte]]] { cb =>
+    val t = IO.async[Option[Chunk[Byte]]] { cb =>
       if (complete) cb(End)
       else channelRead(timeout = timeout).onComplete {
         case Success(DataFrame(last, bytes,_)) =>
@@ -200,7 +201,7 @@ private class Http2NodeStage(streamId: Int,
         case Left(t) =>
           val resp = Response(InternalServerError)
                        .withBody("500 Internal Service Error\n" + t.getMessage)
-                       .unsafeRun // TODO Yuck
+                       .unsafeRunSync // TODO Yuck
 
           renderResponse(req, resp)
       }

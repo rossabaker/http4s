@@ -2,6 +2,7 @@ package org.http4s
 
 import cats.arrow.Choice
 import cats.data._
+import cats.effect.IO
 import fs2._
 import org.http4s.batteries._
 import org.log4s.getLogger
@@ -20,7 +21,7 @@ package object server {
   type Middleware[A, B, C, D] = Service[A, B] => Service[C, D]
 
   object Middleware {
-    def apply[A, B, C, D](f: (C, Service[A, B]) => Task[D]): Middleware[A, B, C, D] = {
+    def apply[A, B, C, D](f: (C, Service[A, B]) => IO[D]): Middleware[A, B, C, D] = {
       service => Service.lift {
         req => f(req, service)
       }
@@ -67,7 +68,7 @@ package object server {
   }
 
   private[this] val messageFailureLogger = getLogger("org.http4s.server.message-failures")
-  def messageFailureHandler(req: Request): PartialFunction[Throwable, Task[Response]] = {
+  def messageFailureHandler(req: Request): PartialFunction[Throwable, IO[Response]] = {
     case mf: MessageFailure =>
       messageFailureLogger.debug(mf)(s"""Message failure handling request: ${req.method} ${req.pathInfo} from ${req.remoteAddr.getOrElse("<unknown>")}""")
       mf.toHttpResponse(req.httpVersion)

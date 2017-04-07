@@ -6,6 +6,7 @@ import scala.annotation.implicitNotFound
 import scala.annotation.unchecked.uncheckedVariance
 import scala.util.control.NonFatal
 
+import cats.effect.IO
 import fs2._
 import fs2.io._
 import org.http4s.batteries._
@@ -15,7 +16,7 @@ import scodec.bits.ByteVector
 
 /** A type that can be used to decode a [[Message]]
   * EntityDecoder is used to attempt to decode a [[Message]] returning the
-  * entire resulting A. If an error occurs it will result in a failed Task
+  * entire resulting A. If an error occurs it will result in a failed IO
   * The default decoders provided here are not streaming, but one could implement
   * a streaming decoder by having the value of A be some kind of streaming construct.
   * @tparam T result type produced by the decoder
@@ -128,7 +129,7 @@ object EntityDecoder extends EntityDecoderInstances {
     DecodeResult.success(msg.body.chunks.runFoldMap[Chunk[Byte]](identity))
 
   /** Decodes a message to a String */
-  def decodeString(msg: Message)(implicit defaultCharset: Charset = DefaultCharset): Task[String] =
+  def decodeString(msg: Message)(implicit defaultCharset: Charset = DefaultCharset): IO[String] =
     msg.bodyAsText.runFoldMap(identity)
 }
 
@@ -141,7 +142,7 @@ trait EntityDecoderInstances {
   /** Provides a mechanism to fail decoding */
   def error[T](t: Throwable): EntityDecoder[T] = new EntityDecoder[T] {
     override def decode(msg: Message, strict: Boolean): DecodeResult[T] = {
-      DecodeResult(msg.body.open.close.run.flatMap(_ => Task.fail(t)))
+      DecodeResult(msg.body.open.close.run.flatMap(_ => IO.fail(t)))
     }
     override def consumes: Set[MediaRange] = Set.empty
   }
@@ -158,13 +159,13 @@ trait EntityDecoderInstances {
   // File operations // TODO: rewrite these using NIO non blocking FileChannels, and do these make sense as a 'decoder'?
   def binFile(file: File): EntityDecoder[File] =
     EntityDecoder.decodeBy(MediaRange.`*/*`){ msg =>
-      val sink = writeOutputStream[Task](Task.delay(new FileOutputStream(file)))
+      val sink = writeOutputStream[IO](IO.delay(new FileOutputStream(file)))
       DecodeResult.success(msg.body.to(sink).run).map(_ => file)
     }
 
   def textFile(file: File): EntityDecoder[File] =
     EntityDecoder.decodeBy(MediaRange.`text/*`){ msg =>
-      val sink = writeOutputStream[Task](Task.delay(new PrintStream(new FileOutputStream(file))))
+      val sink = writeOutputStream[IO](IO.delay(new PrintStream(new FileOutputStream(file))))
       DecodeResult.success(msg.body.to(sink).run).map(_ => file)
     }
 

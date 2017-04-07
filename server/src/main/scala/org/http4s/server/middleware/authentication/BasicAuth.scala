@@ -3,6 +3,7 @@ package server
 package middleware
 package authentication
 
+import cats.effect.IO
 import fs2._
 import org.http4s.batteries._
 import org.http4s.headers.Authorization
@@ -19,7 +20,7 @@ object BasicAuth {
     * hashed value).  A Some value indicates success; None indicates
     * the password failed to validate.
     */
-  type BasicAuthenticator[A] = BasicCredentials => Task[Option[A]]
+  type BasicAuthenticator[A] = BasicCredentials => IO[Option[A]]
 
   /**
     * Construct authentication middleware that can validate the client-provided
@@ -42,12 +43,12 @@ object BasicAuth {
       }
     }
 
-  private def validatePassword[A](validate: BasicAuthenticator[A], req: Request): Task[Option[A]] = {
+  private def validatePassword[A](validate: BasicAuthenticator[A], req: Request): IO[Option[A]] = {
     req.headers.get(Authorization) match {
       case Some(Authorization(creds: BasicCredentials)) =>
         validate(creds)
       case _ =>
-        Task.now(None)
+        IO.now(None)
     }
   }
 }

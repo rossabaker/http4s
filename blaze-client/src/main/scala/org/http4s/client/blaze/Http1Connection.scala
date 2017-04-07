@@ -18,9 +18,10 @@ import org.http4s.util.{StringWriter, Writer}
 import scala.annotation.tailrec
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
+import cats.effect.IO
 import cats.syntax.either._
 import cats.syntax.flatMap._
-import fs2.{Strategy, Task}
+import fs2.Strategy
 import fs2._
 import fs2.interop.cats._
 
@@ -95,7 +96,7 @@ private final class Http1Connection(val requestKey: RequestKey,
     }
   }
 
-  def runRequest(req: Request): Task[Response] = Task.suspend[Response] {
+  def runRequest(req: Request): IO[Response] = IO.suspend[Response] {
     stageState.get match {
       case Idle =>
         if (stageState.compareAndSet(Idle, Running)) {
@@ -108,10 +109,10 @@ private final class Http1Connection(val requestKey: RequestKey,
         }
       case Running =>
         logger.error(s"Tried to run a request already in running state.")
-        Task.fail(InProgressException)
+        IO.fail(InProgressException)
       case Error(e) =>
         logger.debug(s"Tried to run a request in closed/error state: ${e}")
-        Task.fail(e)
+        IO.fail(e)
     }
   }
 
@@ -119,11 +120,11 @@ private final class Http1Connection(val requestKey: RequestKey,
 
   override protected def contentComplete(): Boolean = parser.contentComplete()
 
-  private def executeRequest(req: Request): Task[Response] = {
+  private def executeRequest(req: Request): IO[Response] = {
     logger.debug(s"Beginning request: ${req.method} ${req.uri}")
     validateRequest(req) match {
-      case Left(e)    => Task.fail(e)
-      case Right(req) => Task.suspend {
+      case Left(e)    => IO.fail(e)
+      case Right(req) => IO.suspend {
 
         val initWriterSize : Int = 512
         val rr : StringWriter = new StringWriter(initWriterSize)
@@ -141,24 +142,24 @@ private final class Http1Connection(val requestKey: RequestKey,
           case None => getHttpMinor(req) == 0
         }
 
-        val bodyTask : Task[Boolean] = getChunkEncoder(req, mustClose, rr)
+        val bodyIO : IO[Boolean] = getChunkEncoder(req, mustClose, rr)
           .writeEntityBody(req.body)
           .handle { case EOF => false }
         // If we get a pipeline closed, we might still be good. Check response
-        val responseTask : Task[Response] = receiveResponse(mustClose, doesntHaveBody = req.method == Method.HEAD)
+        val responseIO : IO[Response] = receiveResponse(mustClose, doesntHaveBody = req.method == Method.HEAD)
 
-        bodyTask
-          .followedBy(responseTask)
+        bodyIO
+          .followedBy(responseIO)
           .handleWith { case t =>
             fatalError(t, "Error executing request")
-            Task.fail(t)
+            IO.fail(t)
           }
       }
     }
   }
 
-  private def receiveResponse(closeOnFinish: Boolean, doesntHaveBody: Boolean): Task[Response] =
-    Task.async[Response](cb => readAndParsePrelude(cb, closeOnFinish, doesntHaveBody, "Initial Read"))
+  private def receiveResponse(closeOnFinish: Boolean, doesntHaveBody: Boolean): IO[Response] =
+    IO.async[Response](cb => readAndParsePrelude(cb, closeOnFinish, doesntHaveBody, "Initial Read"))
 
   // this method will get some data, and try to continue parsing using the implicit ec
   private def readAndParsePrelude(cb: Callback[Response], closeOnFinish: Boolean, doesntHaveBody: Boolean, phase: String): Unit = {
@@ -212,14 +213,14 @@ private final class Http1Connection(val requestKey: RequestKey,
           // We are to the point of parsing the body and then cleaning up
           val (rawBody, _): (EntityBody, () => Future[ByteBuffer]) = collectBodyFromParser(buffer, terminationCondition _)
 
-          // to collect the trailers we need a cleanup helper and a Task in the attribute map
+          // to collect the trailers we need a cleanup helper and a IO in the attribute map
           val (trailerCleanup, attributes) : (()=> Unit, AttributeMap) = {
             if (parser.getHttpVersion().minor == 1 && parser.isChunked()) {
               val trailers = new AtomicReference(Headers.empty)
 
-              val attrs = AttributeMap.empty.put(Message.Keys.TrailerHeaders, Task.suspend {
-                if (parser.contentComplete()) Task.now(trailers.get())
-                else Task.fail(new IllegalStateException("Attempted to collect trailers before the body was complete."))
+              val attrs = AttributeMap.empty.put(Message.Keys.TrailerHeaders, IO.suspend {
+                if (parser.contentComplete()) IO.now(trailers.get())
+                else IO.fail(new IllegalStateException("Attempted to collect trailers before the body was complete."))
               })
 
               ( { () => trailers.set(parser.getHeaders()) }, attrs)
@@ -232,7 +233,7 @@ private final class Http1Connection(val requestKey: RequestKey,
             cleanup()
             attributes -> rawBody
           } else {
-            attributes -> rawBody.onFinalize( Stream.eval_(Task{ trailerCleanup(); cleanup(); stageShutdown() } ).run )
+            attributes -> rawBody.onFinalize( Stream.eval_(IO{ trailerCleanup(); cleanup(); stageShutdown() } ).run )
           }
         }
         cb(Either.right(

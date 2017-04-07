@@ -2,6 +2,7 @@ package org.http4s
 package server
 package middleware
 
+import cats.effect.IO
 import fs2._
 import org.http4s.headers._
 
@@ -13,7 +14,7 @@ package object authentication {
         case Right(authedRequest) =>
           service(authedRequest)
         case Left(challenge) =>
-          Task.now(Response(Status.Unauthorized).putHeaders(`WWW-Authenticate`(challenge)))
+          IO.now(Response(Status.Unauthorized).putHeaders(`WWW-Authenticate`(challenge)))
       }
     }
 }

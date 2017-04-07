@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 
 import scala.concurrent._
 
+import cats.effect.IO
 import fs2._
 import org.http4s.Headers
 import org.http4s.blaze.pipeline.TailStage
@@ -11,7 +12,7 @@ import org.http4s.util.StringWriter
 
 class CachingChunkWriter(headers: StringWriter,
                          pipe: TailStage[ByteBuffer],
-                         trailer: Task[Headers],
+                         trailer: IO[Headers],
                          bufferMaxSize: Int = 10*1024)(implicit ec: ExecutionContext)
               extends ChunkEntityBodyWriter(headers, pipe, trailer) {
 

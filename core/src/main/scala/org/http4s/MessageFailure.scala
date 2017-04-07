@@ -4,6 +4,7 @@ import scala.util.control.{NoStackTrace, NonFatal}
 
 import cats._
 import cats.data._
+import cats.effect.IO
 import cats.instances.either.catsStdInstancesForEither
 import fs2._
 import org.http4s.batteries._
@@ -19,7 +20,7 @@ sealed abstract class MessageFailure extends RuntimeException {
     message
 
   /** Provides a default rendering of this failure as a [[Response]]. */
-  def toHttpResponse(httpVersion: HttpVersion): Task[Response]
+  def toHttpResponse(httpVersion: HttpVersion): IO[Response]
 
 }
 
@@ -43,16 +44,16 @@ final case class ParseFailure(sanitized: String, details: String) extends Parsin
     else if (details.isEmpty) sanitized
     else s"$sanitized: $details"
 
-  def toHttpResponse(httpVersion: HttpVersion): Task[Response] =
+  def toHttpResponse(httpVersion: HttpVersion): IO[Response] =
     Response(Status.BadRequest, httpVersion).withBody(sanitized)
 }
 
 /** Generic description of a failure to parse an HTTP [[Message]] */
-final case class GenericParsingFailure(sanitized: String, details: String, response: HttpVersion => Task[Response]) extends ParsingFailure {
+final case class GenericParsingFailure(sanitized: String, details: String, response: HttpVersion => IO[Response]) extends ParsingFailure {
   def message: String =
     ParseFailure(sanitized, details).message
 
-  def toHttpResponse(httpVersion: HttpVersion): Task[Response] =
+  def toHttpResponse(httpVersion: HttpVersion): IO[Response] =
     response(httpVersion)
 }
 
@@ -85,8 +86,8 @@ object ParseResult {
 sealed abstract class DecodeFailure extends MessageFailure
 
 /** Generic description of a failure to decode a [[Message]] */
-final case class GenericDecodeFailure(message: String, response: HttpVersion => Task[Response]) extends DecodeFailure {
-  def toHttpResponse(httpVersion: HttpVersion): Task[Response] =
+final case class GenericDecodeFailure(message: String, response: HttpVersion => IO[Response]) extends DecodeFailure {
+  def toHttpResponse(httpVersion: HttpVersion): IO[Response] =
     response(httpVersion)
 }
 
@@ -102,8 +103,8 @@ sealed abstract class MessageBodyFailure extends DecodeFailure {
 /** Generic description of a failure to handle a [[Message]] body */
 final case class GenericMessageBodyFailure(message: String,
                                            override val cause: Option[Throwable],
-                                           response: HttpVersion => Task[Response]) extends MessageBodyFailure {
-  def toHttpResponse(httpVersion: HttpVersion): Task[Response] =
+                                           response: HttpVersion => IO[Response]) extends MessageBodyFailure {
+  def toHttpResponse(httpVersion: HttpVersion): IO[Response] =
     response(httpVersion)
 }
 
@@ -112,7 +113,7 @@ sealed case class MalformedMessageBodyFailure(details: String, override val caus
   def message: String =
     s"Malformed request body: $details"
 
-  def toHttpResponse(httpVersion: HttpVersion): Task[Response] =
+  def toHttpResponse(httpVersion: HttpVersion): IO[Response] =
     Response(Status.BadRequest, httpVersion).withBody(s"The request body was malformed.")
 }
 
@@ -121,7 +122,7 @@ sealed case class InvalidMessageBodyFailure(details: String, override val cause:
   def message: String =
     s"Invalid request body: $details"
 
-  override def toHttpResponse(httpVersion: HttpVersion): Task[Response] =
+  override def toHttpResponse(httpVersion: HttpVersion): IO[Response] =
     Response(Status.UnprocessableEntity, httpVersion).withBody(s"The request body was invalid.")
 }
 
@@ -132,7 +133,7 @@ sealed abstract class UnsupportedMediaTypeFailure(expected: Set[MediaRange]) ext
   val expectedMsg: String = s"Expected one of the following media ranges: ${expected.map(_.renderString).mkString(", ")}"
   val responseMsg: String = s"$sanitizedResponsePrefix. $expectedMsg"
 
-  def toHttpResponse(httpVersion: HttpVersion): Task[Response] =
+  def toHttpResponse(httpVersion: HttpVersion): IO[Response] =
     Response(Status.UnsupportedMediaType, httpVersion)
       .withBody(responseMsg)
 }

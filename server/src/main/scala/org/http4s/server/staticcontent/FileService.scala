@@ -6,6 +6,7 @@ import java.io.File
 import java.util.concurrent.ExecutorService
 
 import cats.data.{NonEmptyList, OneAnd}
+import cats.effect.IO
 import fs2._
 import org.http4s.headers._
 import org.http4s.headers.Range.SubRange
@@ -25,7 +26,7 @@ object FileService {
     */
   final case class Config(systemPath: String,
                           pathPrefix: String = "",
-                          pathCollector: (File, Config, Request) => Task[Option[Response]] = filesOnly,
+                          pathCollector: (File, Config, Request) => IO[Option[Response]] = filesOnly,
                           bufferSize: Int = 50*1024,
                           executor: ExecutorService = DefaultPool,
                           cacheStrategy: CacheStrategy = NoopCacheStrategy)
@@ -38,14 +39,14 @@ object FileService {
     else
       getFile(config.systemPath + '/' + getSubPath(uriPath, config.pathPrefix))
         .map { f => config.pathCollector(f, config, req) }
-        .getOrElse(Task.now(None))
+        .getOrElse(IO.now(None))
         .flatMap(_.fold(Pass.now)(config.cacheStrategy.cache(uriPath, _)))
   }
 
   /* Returns responses for static files.
    * Directories are forbidden.
    */
-  private def filesOnly(file: File, config: Config, req: Request): Task[Option[Response]] = Task.now {
+  private def filesOnly(file: File, config: Config, req: Request): IO[Option[Response]] = IO.now {
     if (file.isDirectory()) Some(Response(Status.Unauthorized))
     else if (!file.isFile) None
     else getPartialContentFile(file, config, req) orElse

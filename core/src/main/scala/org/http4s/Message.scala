@@ -4,6 +4,7 @@ import java.io.File
 import java.net.{InetSocketAddress, InetAddress}
 
 import cats._
+import cats.effect.IO
 import fs2._
 import fs2.text._
 import org.http4s.headers._
@@ -24,7 +25,7 @@ sealed trait Message extends MessageOps { self =>
 
   def body: EntityBody
 
-  final def bodyAsText(implicit defaultCharset: Charset = DefaultCharset): Stream[Task, String] = {
+  final def bodyAsText(implicit defaultCharset: Charset = DefaultCharset): Stream[IO, String] = {
     (charset getOrElse defaultCharset) match {
       case Charset.`UTF-8` =>
         // suspect this one is more efficient, though this is superstition
@@ -61,7 +62,7 @@ sealed trait Message extends MessageOps { self =>
     * @tparam T type of the Body
     * @return a new message with the new body
     */
-  def withBody[T](b: T)(implicit w: EntityEncoder[T]): Task[Self] = {
+  def withBody[T](b: T)(implicit w: EntityEncoder[T]): IO[Self] = {
     w.toEntity(b).map { entity =>
       val hs = entity.length match {
         case Some(l) => `Content-Length`(l)::w.headers.toList
@@ -85,13 +86,13 @@ sealed trait Message extends MessageOps { self =>
    * The trailer headers, as specified in Section 3.6.1 of RFC 2616.  The resulting
    * task might not complete unless the entire body has been consumed.
    */
-  def trailerHeaders: Task[Headers] = attributes.get(Message.Keys.TrailerHeaders).getOrElse(Task.now(Headers.empty))
+  def trailerHeaders: IO[Headers] = attributes.get(Message.Keys.TrailerHeaders).getOrElse(IO.now(Headers.empty))
 
   /** Decode the [[Message]] to the specified type
     *
     * @param decoder [[EntityDecoder]] used to decode the [[Message]]
     * @tparam T type of the result
-    * @return the `Task` which will generate the `DecodeResult[T]`
+    * @return the `IO` which will generate the `DecodeResult[T]`
     */
   override def attemptAs[T](implicit decoder: EntityDecoder[T]): DecodeResult[T] =
     decoder.decode(this, strict = false)
@@ -99,7 +100,7 @@ sealed trait Message extends MessageOps { self =>
 
 object Message {
   object Keys {
-    val TrailerHeaders = AttributeKey.http4s[Task[Headers]]("trailer-headers")
+    val TrailerHeaders = AttributeKey.http4s[IO[Headers]]("trailer-headers")
   }
 }
 
@@ -112,7 +113,7 @@ object Message {
   * @param uri representation of the request URI
   * @param httpVersion the HTTP version
   * @param headers collection of [[Header]]s
-  * @param body scalaz.stream.Process[Task,Chunk] defining the body of the request
+  * @param body scalaz.stream.Process[IO,Chunk] defining the body of the request
   * @param attributes Immutable Map used for carrying additional information in a type safe fashion
   */
 final case class Request(
@@ -204,7 +205,7 @@ final case class Request(
 
   def serverSoftware: ServerSoftware = attributes.get(Keys.ServerSoftware).getOrElse(ServerSoftware.Unknown)
 
-  def decodeWith[A](decoder: EntityDecoder[A], strict: Boolean)(f: A => Task[Response]): Task[Response] =
+  def decodeWith[A](decoder: EntityDecoder[A], strict: Boolean)(f: A => IO[Response]): IO[Response] =
     decoder.decode(this, strict = strict).fold(_.toHttpResponse(httpVersion), f).flatten
 
   override def toString: String =
@@ -264,25 +265,25 @@ object MaybeResponse {
         a orElse b
     }
 
-  implicit val taskInstance: Monoid[Task[MaybeResponse]] =
-    new Monoid[Task[MaybeResponse]] {
+  implicit val taskInstance: Monoid[IO[MaybeResponse]] =
+    new Monoid[IO[MaybeResponse]] {
       def empty =
         Pass.now
-      def combine(ta: Task[MaybeResponse], tb: Task[MaybeResponse]): Task[MaybeResponse] =
-        ta.flatMap(_.cata(Task.now, tb))
+      def combine(ta: IO[MaybeResponse], tb: IO[MaybeResponse]): IO[MaybeResponse] =
+        ta.flatMap(_.cata(IO.now, tb))
     }
 }
 
 case object Pass extends MaybeResponse {
-  val now: Task[MaybeResponse] =
-    Task.now(Pass)
+  val now: IO[MaybeResponse] =
+    IO.now(Pass)
 }
 
 /** Representation of the HTTP response to send back to the client
  *
  * @param status [[Status]] code and message
  * @param headers [[Headers]] containing all response headers
- * @param body scalaz.stream.Process[Task,Chunk] representing the possible body of the response
+ * @param body scalaz.stream.Process[IO,Chunk] representing the possible body of the response
  * @param attributes [[AttributeMap]] containing additional parameters which may be used by the http4s
  *                   backend for additional processing such as java.io.File object
  */
@@ -307,10 +308,10 @@ final case class Response(
 
 object Response {
   @deprecated("Use Pass.now instead", "0.16")
-  val fallthrough: Task[MaybeResponse] =
+  val fallthrough: IO[MaybeResponse] =
     Pass.now
 
-  def notFound(request: Request): Task[Response] = {
+  def notFound(request: Request): IO[Response] = {
     val body = s"${request.pathInfo} not found"
     Response(Status.NotFound).withBody(body)
   }

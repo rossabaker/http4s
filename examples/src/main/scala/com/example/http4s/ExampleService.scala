@@ -4,7 +4,9 @@ import java.util.concurrent.ExecutorService
 import scala.concurrent._
 import scala.concurrent.duration._
 
+import cats.effect.IO
 import fs2._
+import fs2.util.Async
 import _root_.io.circe.Json
 import org.http4s._
 import org.http4s.MediaType._
@@ -68,7 +70,7 @@ object ExampleService {
       // captures everything after "/static" into `path`
       // Try http://localhost:8080/http4s/static/nasa_blackhole_image.jpg
       // See also org.http4s.server.staticcontent to create a mountable service for static content
-      StaticFile.fromResource(path.toString, Some(req)).fold(NotFound())(Task.now)
+      StaticFile.fromResource(path.toString, Some(req)).fold(NotFound())(IO.now)
 
     ///////////////////////////////////////////////////////////////
     //////////////// Dealing with the message body ////////////////
@@ -97,7 +99,7 @@ object ExampleService {
 
           case None => BadRequest(s"Invalid data: " + data)
         }
-      } handleWith {    // We can handle errors using Task methods
+      } handleWith {    // We can handle errors using IO methods
         case e: NumberFormatException => BadRequest("Not an int: " + e.getMessage)
       }
 
@@ -134,7 +136,7 @@ object ExampleService {
       Ok(html.formEncoded())
 
     case req @ POST -> Root / "form-encoded" =>
-      // EntityDecoders return a Task[A] which is easy to sequence
+      // EntityDecoders return a IO[A] which is easy to sequence
       req.decode[UrlForm] { m =>
         val s = m.values.mkString("\n")
         Ok(s"Form Encoded Data\n$s")
@@ -151,7 +153,7 @@ object ExampleService {
 
     case req @ GET -> Root / "image.jpg" =>
       StaticFile.fromResource("/nasa_blackhole_image.jpg", Some(req))
-        .map(Task.now)
+        .map(IO.now)
         .getOrElse(NotFound())
 
     ///////////////////////////////////////////////////////////////
@@ -174,10 +176,10 @@ object ExampleService {
   implicit val defaultScheduler = Scheduler.fromFixedDaemonPool(1)
 
   // This is a mock data source, but could be a Process representing results from a database
-  def dataStream(n: Int)(implicit S: Strategy): Stream[Task, String] = {
+  def dataStream(n: Int)(implicit S: Strategy): Stream[IO, String] = {
     val interval = 100.millis
-    // TODO fs2 port I'm not sure why Task.asyncInstance isn't inferred
-    val stream = time.awakeEvery(interval)(Task.asyncInstance, defaultScheduler)
+    // TODO fs2 port I'm not sure why IO.asyncInstance isn't inferred
+    val stream = time.awakeEvery(interval)(implicitly[Async[IO]], defaultScheduler)
       .map(_ => s"Current system time: ${System.currentTimeMillis()} ms\n")
       .take(n.toLong)
 
@@ -188,8 +190,8 @@ object ExampleService {
   val realm = "testrealm"
 
   def authStore(creds: BasicCredentials) =
-    if (creds.username == "username" && creds.password == "password") Task.now(Some(creds.username))
-    else Task.now(None)
+    if (creds.username == "username" && creds.password == "password") IO.now(Some(creds.username))
+    else IO.now(None)
 
   // An AuthedService[A] is a Service[(A, Request), Response] for some
   // user type A.  `BasicAuth` is an auth middleware, which binds an

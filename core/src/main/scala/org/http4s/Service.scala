@@ -3,6 +3,7 @@ package org.http4s
 import cats._
 import cats.arrow.Choice
 import cats.data._
+import cats.effect.IO
 import fs2._
 import org.http4s.batteries._
 
@@ -13,20 +14,20 @@ object Service {
     * all requests it is given.  If `f` is a `PartialFunction`, use `apply`
     * instead.
     */
-  def lift[A, B](f: A => Task[B]): Service[A, B] =
+  def lift[A, B](f: A => IO[B]): Service[A, B] =
     Kleisli(f)
 
   /** Lifts a partial function to an `Service`.  Responds with the
     * zero of [B] for any request where `pf` is not defined.
     */
-  def apply[A, B: Monoid](pf: PartialFunction[A, Task[B]]): Service[A, B] =
-    lift(req => pf.applyOrElse(req, Function.const(Task.now(Monoid[B].empty))))
+  def apply[A, B: Monoid](pf: PartialFunction[A, IO[B]]): Service[A, B] =
+    lift(req => pf.applyOrElse(req, Function.const(IO.now(Monoid[B].empty))))
 
   /**
-    * Lifts a Task into a [[Service]].
+    * Lifts a IO into a [[Service]].
     *
     */
-  def const[A, B](b: Task[B]): Service[A, B] =
+  def const[A, B](b: IO[B]): Service[A, B] =
     lift(_ => b)
 
   /**
@@ -34,10 +35,10 @@ object Service {
     *
     */
   def constVal[A, B](b: => B): Service[A, B] =
-    lift(_ => Task.delay(b))
+    lift(_ => IO.delay(b))
 
   /** Allows Service chainig through a `scalaz.Monoid` instance. */
-  def withFallback[A, B](fallback: Service[A, B])(service: Service[A, B])(implicit M: Monoid[Task[B]]): Service[A, B] =
+  def withFallback[A, B](fallback: Service[A, B])(service: Service[A, B])(implicit M: Monoid[IO[B]]): Service[A, B] =
     service |+| fallback
 
   /** A service that always returns the zero of B. */

@@ -3,6 +3,7 @@ package server
 
 import java.util.concurrent.TimeUnit
 
+import cats.effect.IO
 import fs2._
 import com.codahale.metrics.MetricRegistry
 import com.codahale.metrics.json.MetricsModule
@@ -22,7 +23,7 @@ package object metrics {
     }
 
   /** Returns an OK response with a JSON dump of a MetricRegistry */
-  def metricsResponse(registry: MetricRegistry, mapper: ObjectMapper = defaultMapper): Task[Response] =
+  def metricsResponse(registry: MetricRegistry, mapper: ObjectMapper = defaultMapper): IO[Response] =
     Response(Status.Ok).withBody(registry)(metricRegistryEncoder(mapper))
 
   /** Returns an OK response with a JSON dump of a MetricRegistry */

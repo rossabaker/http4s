@@ -6,14 +6,12 @@ import java.nio.ByteBuffer
 import scala.collection.mutable.ListBuffer
 
 import cats.data._
+import cats.effect.IO
 import fs2._
 import org.log4s.Logger
 import scala.util.Either
 
 import cats.syntax.all._
-// import cats.syntax.flatMap._
-// import cats.syntax.functor._
-// import cats.syntax.bifunctor._
 import org.http4s.ParseResult.parseResultMonad
 
 
@@ -43,11 +41,11 @@ private final class Http1ServerParser(logger: Logger,
 
     val attrsWithTrailers =
       if (minorVersion() == 1 && isChunked) {
-        attrs.put(Message.Keys.TrailerHeaders, Task.suspend {
+        attrs.put(Message.Keys.TrailerHeaders, IO.suspend {
           if (!contentComplete()) {
-            Task.fail(new IllegalStateException("Attempted to collect trailers before the body was complete."))
+            IO.fail(new IllegalStateException("Attempted to collect trailers before the body was complete."))
           }
-          else Task.now(Headers(headers.result()))
+          else IO.now(Headers(headers.result()))
         })
       } else attrs // Won't have trailers without a chunked body
 

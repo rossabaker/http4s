@@ -1,6 +1,7 @@
 package org
 
 import cats.data._
+import cats.effect.IO
 import fs2._
 import fs2.util.Attempt
 
@@ -8,7 +9,7 @@ package object http4s { // scalastyle:ignore
 
   type AuthScheme = util.CaseInsensitiveString
 
-  type EntityBody = Stream[Task, Byte]
+  type EntityBody = Stream[IO, Byte]
 
   val EmptyBody: EntityBody =
     Stream.empty
@@ -16,7 +17,7 @@ package object http4s { // scalastyle:ignore
   val ApiVersion: Http4sVersion =
     Http4sVersion(BuildInfo.apiVersion._1, BuildInfo.apiVersion._2)
 
-  type DecodeResult[A] = EitherT[Task, DecodeFailure, A]
+  type DecodeResult[A] = EitherT[IO, DecodeFailure, A]
 
   type ParseResult[+A] = Either[ParseFailure, A]
 
@@ -27,10 +28,10 @@ package object http4s { // scalastyle:ignore
    * to response type `B`.  By wrapping the [[Service]], we can compose them
    * using Kleisli operations.
    */
-  type Service[A, B] = Kleisli[Task, A, B]
+  type Service[A, B] = Kleisli[IO, A, B]
 
   /**
-    * A [[Service]] that produces a Task to compute a [[Response]] from a
+    * A [[Service]] that produces a IO to compute a [[Response]] from a
     * [[Request]].  An HttpService can be run on any supported http4s
     * server backend, such as Blaze, Jetty, or Tomcat.
     */
@@ -45,13 +46,13 @@ package object http4s { // scalastyle:ignore
       * handle all requests it is given.  If `f` is a `PartialFunction`, use
       * `apply` instead.
       */
-    def lift(f: Request => Task[MaybeResponse]): HttpService = Service.lift(f)
+    def lift(f: Request => IO[MaybeResponse]): HttpService = Service.lift(f)
 
     /** Lifts a partial function to an `HttpService`.  Responds with
       * [[org.http4s.Response.fallthrough]], which generates a 404, for any request
       * where `pf` is not defined.
       */
-    def apply(pf: PartialFunction[Request, Task[Response]]): HttpService =
+    def apply(pf: PartialFunction[Request, IO[Response]]): HttpService =
       lift(req => pf.applyOrElse(req, Function.const(Pass.now)))
 
     val empty: HttpService =
@@ -67,13 +68,13 @@ package object http4s { // scalastyle:ignore
       * handle all requests it is given.  If `f` is a `PartialFunction`, use
       * `apply` instead.
       */
-    def lift[T](f: AuthedRequest[T] => Task[MaybeResponse]): AuthedService[T] = Service.lift(f)
+    def lift[T](f: AuthedRequest[T] => IO[MaybeResponse]): AuthedService[T] = Service.lift(f)
 
     /** Lifts a partial function to an `AuthedService`.  Responds with
       * [[org.http4s.Response.fallthrough]], which generates a 404, for any request
       * where `pf` is not defined.
       */
-    def apply[T](pf: PartialFunction[AuthedRequest[T], Task[Response]]): AuthedService[T] =
+    def apply[T](pf: PartialFunction[AuthedRequest[T], IO[Response]]): AuthedService[T] =
       lift(req => pf.applyOrElse(req, Function.const(Pass.now)))
 
     /**
@@ -89,7 +90,7 @@ package object http4s { // scalastyle:ignore
   type Callback[A] = Attempt[A] => Unit
 
   /** A stream of server-sent events */
-  type EventStream = Stream[Task, ServerSentEvent]
+  type EventStream = Stream[IO, ServerSentEvent]
 
   @deprecated("Moved to org.http4s.syntax.AllSyntax", "0.16")
   type Http4sSyntax = syntax.AllSyntax

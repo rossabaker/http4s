@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets.ISO_8859_1
 
 import scala.concurrent._
 
+import cats.effect.IO
 import fs2._
 import org.http4s.batteries._
 import org.http4s.blaze.pipeline.TailStage
@@ -14,7 +15,7 @@ import org.http4s.util.StringWriter
 
 class ChunkEntityBodyWriter(private var headers: StringWriter,
                          pipe: TailStage[ByteBuffer],
-                         trailer: Task[Headers])
+                         trailer: IO[Headers])
                          (implicit val ec: ExecutionContext) extends EntityBodyWriter {
 
   import org.http4s.blaze.util.ChunkEntityBodyWriter._

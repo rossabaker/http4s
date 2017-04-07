@@ -6,7 +6,8 @@ import java.util.concurrent.ExecutorService
 import javax.servlet._
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
-import fs2.{Strategy, Task}
+import cats.effect.IO
+import fs2.Strategy
 import org.http4s.batteries._
 import org.http4s.headers.`Transfer-Encoding`
 import org.http4s.server._
@@ -73,16 +74,16 @@ class Http4sServlet(service: HttpService,
 
   private def onParseFailure(parseFailure: ParseFailure,
                              servletResponse: HttpServletResponse,
-                             bodyWriter: BodyWriter): Task[Unit] = {
+                             bodyWriter: BodyWriter): IO[Unit] = {
     val response = Response(Status.BadRequest).withBody(parseFailure.sanitized)
     renderResponse(response, servletResponse, bodyWriter)
   }
 
   private def handleRequest(ctx: AsyncContext,
                             request: Request,
-                            bodyWriter: BodyWriter): Task[Unit] = {
+                            bodyWriter: BodyWriter): IO[Unit] = {
     ctx.addListener(new AsyncTimeoutHandler(request, bodyWriter))
-    val response = Task.start {
+    val response = IO.start {
       try serviceFn(request)
         // Handle message failures coming out of the service as failed tasks
         .handleWith(messageFailureHandler(request))
@@ -100,7 +101,7 @@ class Http4sServlet(service: HttpService,
       val servletResponse = ctx.getResponse.asInstanceOf[HttpServletResponse]
       if (!servletResponse.isCommitted) {
         val response = Response(Status.InternalServerError).withBody("Service timed out.")
-        renderResponse(response, servletResponse, bodyWriter).unsafeRun
+        renderResponse(response, servletResponse, bodyWriter).unsafeRunSync
       }
       else {
         val servletRequest = ctx.getRequest.asInstanceOf[HttpServletRequest]
@@ -110,9 +111,9 @@ class Http4sServlet(service: HttpService,
     }
   }
 
-  private def renderResponse(response: Task[MaybeResponse],
+  private def renderResponse(response: IO[MaybeResponse],
                              servletResponse: HttpServletResponse,
-                             bodyWriter: BodyWriter): Task[Unit] =
+                             bodyWriter: BodyWriter): IO[Unit] =
     response.flatMap { maybeResponse =>
       val r = maybeResponse.orNotFound
       // Note: the servlet API gives us no undeprecated method to both set
@@ -129,10 +130,10 @@ class Http4sServlet(service: HttpService,
 
     case t: Throwable =>
       logger.error(t)("Error processing request")
-      val response = Task.now(Response(Status.InternalServerError))
+      val response = IO.now(Response(Status.InternalServerError))
       // We don't know what I/O mode we're in here, and we're not rendering a body
       // anyway, so we use a NullBodyWriter.
-      renderResponse(response, servletResponse, NullBodyWriter).unsafeRun
+      renderResponse(response, servletResponse, NullBodyWriter).unsafeRunSync
       if (servletRequest.isAsyncStarted)
         servletRequest.getAsyncContext.complete()
   }

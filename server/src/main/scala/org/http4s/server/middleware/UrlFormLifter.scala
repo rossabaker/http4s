@@ -2,6 +2,7 @@ package org.http4s
 package server
 package middleware
 
+import cats.effect.IO
 import fs2._
 
 /** [[Middleware]] for lifting application/x-www-form-urlencoded bodies into the
@@ -15,7 +16,7 @@ object UrlFormLifter {
 
   def apply(service: HttpService, strictDecode: Boolean = false): HttpService =  Service.lift { req =>
 
-    def addUrlForm(form: UrlForm): Task[MaybeResponse] = {
+    def addUrlForm(form: UrlForm): IO[MaybeResponse] = {
       val flatForm = form.values.toVector.flatMap{ case (k, vs) => vs.map(v => (k,Some(v))) }
       val params = req.uri.query.toVector ++ flatForm: Vector[(String, Option[String])]
       val newQuery = Query(params :_*)

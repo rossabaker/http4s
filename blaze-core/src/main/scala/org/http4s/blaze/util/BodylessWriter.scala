@@ -7,6 +7,7 @@ import java.nio.ByteBuffer
 import scala.concurrent._
 import scala.util._
 
+import cats.effect.IO
 import fs2._
 import fs2.Stream._
 import fs2.interop.cats._
@@ -28,9 +29,9 @@ class BodylessWriter(headers: ByteBuffer, pipe: TailStage[ByteBuffer], close: Bo
   /** Doesn't write the entity body, just the headers. Kills the stream, if an error if necessary
     *
     * @param p an entity body that will be killed
-    * @return the Task which, when run, will send the headers and kill the entity body
+    * @return the IO which, when run, will send the headers and kill the entity body
     */
-  override def writeEntityBody(p: EntityBody): Task[Boolean] = Task.async { cb =>
+  override def writeEntityBody(p: EntityBody): IO[Boolean] = IO.async { cb =>
     val callback = cb.compose((t: Attempt[Unit]) => t.map(_ => close))
 
     pipe.channelWrite(headers).onComplete {

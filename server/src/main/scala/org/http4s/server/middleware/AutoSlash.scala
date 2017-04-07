@@ -2,6 +2,7 @@ package org.http4s
 package server
 package middleware
 
+import cats.effect.IO
 import fs2._
 
 /** Removes a trailing slash from [[Request]] path
@@ -22,7 +23,7 @@ object AutoSlash {
           service.apply(withSlash)
         }
       case resp =>
-        Task.now(resp)
+        IO.now(resp)
     }
   }
 }

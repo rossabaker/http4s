@@ -1,13 +1,13 @@
 package org.http4s
 package client
 
+import cats.effect.IO
 import java.nio.charset.StandardCharsets
 import javax.crypto
 import org.http4s.headers.Authorization
 import org.http4s.syntax.string._
 import org.http4s.util.UrlCodingUtils
 import scala.collection.mutable.ListBuffer
-import fs2.Task
 
 /** Basic OAuth1 message signing support
   *
@@ -24,7 +24,7 @@ package object oauth1 {
     * __WARNING:__ POST requests with application/x-www-form-urlencoded bodies
     *            will be entirely buffered due to signing requirements. */
   def signRequest(req: Request, consumer: Consumer, callback: Option[Uri],
-                  verifier: Option[String], token: Option[Token]): Task[Request] = {
+                  verifier: Option[String], token: Option[Token]): IO[Request] = {
     getUserParams(req).map { case (req, params) =>
       val auth = genAuthHeader(req.method, req.uri, params, consumer, callback, verifier, token)
       req.putHeaders(auth)
@@ -78,7 +78,7 @@ package object oauth1 {
   private[oauth1] def encode(str: String): String =
     UrlCodingUtils.urlEncode(str, spaceIsPlus = false, toSkip = UrlCodingUtils.Unreserved)
 
-  private[oauth1] def getUserParams(req: Request): Task[(Request,Seq[(String, String)])] = {
+  private[oauth1] def getUserParams(req: Request): IO[(Request,Seq[(String, String)])] = {
     val qparams = req.uri.query.map{ case (k,ov) => (k, ov.getOrElse("")) }
 
     req.contentType match {
@@ -92,7 +92,7 @@ package object oauth1 {
             .map(_ -> (qparams ++ bodyparams))
         }
 
-      case _ => Task.now(req -> qparams)
+      case _ => IO.now(req -> qparams)
     }
   }
 

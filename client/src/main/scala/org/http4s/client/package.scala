@@ -5,7 +5,7 @@ package org.http4s
 import org.http4s.client.impl.{EmptyRequestGenerator, EntityRequestGenerator}
 import Method.{ PermitsBody, NoBody}
 
-
+import cats.effect.IO
 import fs2.interop.cats._
 import fs2._
 
@@ -30,7 +30,7 @@ import fs2._
   */
 
 package object client {
-  type ConnectionBuilder[A <: Connection] = RequestKey => Task[A]
+  type ConnectionBuilder[A <: Connection] = RequestKey => IO[A]
 
   type Middleware = Client => Client
 

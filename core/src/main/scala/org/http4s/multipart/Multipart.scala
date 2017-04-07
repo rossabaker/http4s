@@ -8,6 +8,7 @@ import java.util.Base64
 
 import scala.util.Random
 
+import cats.effect.IO
 import fs2._
 import fs2.Stream._
 import fs2.io._
@@ -42,7 +43,7 @@ object Part {
     Part(`Content-Disposition`("form-data", Map("name" -> name, "filename" -> filename)) +:
            Header("Content-Transfer-Encoding", "binary") +:
            headers,
-         readInputStream(Task.delay(in), ChunkSize))
+         readInputStream(IO.delay(in), ChunkSize))
    }
 }
 

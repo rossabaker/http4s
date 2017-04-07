@@ -1,11 +1,11 @@
 package org.http4s
 
-import fs2.Task
+import cats.effect.IO
 
 package object servlet {
-  protected[servlet] type BodyWriter = Response => Task[Unit]
+  protected[servlet] type BodyWriter = Response => IO[Unit]
 
-  protected[servlet] val NullBodyWriter: BodyWriter = { _ => Task.now(()) }
+  protected[servlet] val NullBodyWriter: BodyWriter = { _ => IO.now(()) }
 
   protected[servlet] val DefaultChunkSize = 4096
 }

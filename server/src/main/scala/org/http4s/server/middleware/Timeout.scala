@@ -6,6 +6,7 @@ import java.util.concurrent._
 import scala.concurrent._
 import scala.concurrent.duration._
 
+import cats.effect.IO
 import fs2._
 import org.http4s.batteries._
 import org.http4s.util.threads.threadFactory
@@ -20,10 +21,10 @@ object Timeout {
     Response(Status.InternalServerError)
       .withBody("The service timed out.")
 
-  private def timeoutResp(timeout: Duration, response: Task[Response], customScheduler: Option[ScheduledExecutorService]): Task[Response] = {
+  private def timeoutResp(timeout: Duration, response: IO[Response], customScheduler: Option[ScheduledExecutorService]): IO[Response] = {
     val scheduler = customScheduler.getOrElse(defaultScheduler)
     implicit val s = Strategy.fromExecutor(scheduler)
-    Task.async[Task[Response]] { cb =>
+    IO.async[IO[Response]] { cb =>
       val r = new Runnable { override def run(): Unit = cb(Right(response)) }
       scheduler.schedule(r, timeout.toNanos, TimeUnit.NANOSECONDS)
       ()
@@ -31,11 +32,11 @@ object Timeout {
   }
 
   /** Transform the service such to return whichever resolves first:
-    * the provided Task[Response], or the result of the service
-    * @param timeoutResponse Task[Response] to race against the result of the service. This will be run for each [[Request]]
+    * the provided IO[Response], or the result of the service
+    * @param timeoutResponse IO[Response] to race against the result of the service. This will be run for each [[Request]]
     * @param service [[org.http4s.server.HttpService]] to transform
     */
-  def race(timeoutResponse: Task[Response], customScheduler: Option[ScheduledExecutorService] = None)(service: HttpService): HttpService = {
+  def race(timeoutResponse: IO[Response], customScheduler: Option[ScheduledExecutorService] = None)(service: HttpService): HttpService = {
     val scheduler = customScheduler.getOrElse(defaultScheduler)
     implicit val s = Strategy.fromExecutor(scheduler)
     service.mapF { resp =>
@@ -49,7 +50,7 @@ object Timeout {
     *   If `None` is provided, then a default daemon thread scheduler will be used.
     * @param service [[HttpService]] to transform
     */
-  def apply(timeout: Duration, response: Task[Response] = DefaultTimeoutResponse, customScheduler: Option[ScheduledExecutorService] = None)(service: HttpService): HttpService = {
+  def apply(timeout: Duration, response: IO[Response] = DefaultTimeoutResponse, customScheduler: Option[ScheduledExecutorService] = None)(service: HttpService): HttpService = {
     if (timeout.isFinite()) race(timeoutResp(timeout, response, customScheduler))(service)
     else service
   }

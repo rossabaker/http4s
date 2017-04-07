@@ -2,7 +2,7 @@ package org.http4s
 package client
 
 import java.util.concurrent.ExecutorService
-import fs2.Task
+import cats.effect.IO
 
 /** Type that is responsible for the client lifecycle
   *
@@ -18,22 +18,22 @@ trait ConnectionManager[A <: Connection] {
   sealed case class NextConnection(connection: A, fresh: Boolean)
 
   /** Shutdown this client, closing any open connections and freeing resources */
-  def shutdown(): Task[Unit]
+  def shutdown(): IO[Unit]
 
   /** Get a connection for the provided request key. */
-   def borrow(requestKey: RequestKey): Task[NextConnection]
+   def borrow(requestKey: RequestKey): IO[NextConnection]
 
   /**
     * Release a connection.  The connection manager may choose to keep the connection for
     * subsequent calls to [[borrow]], or dispose of the connection.
     */
-  def release(connection: A): Task[Unit]
+  def release(connection: A): IO[Unit]
 
   /**
     * Invalidate a connection, ensuring that its resources are freed.  The connection
     * manager may not return this connection on another borrow.
     */
-  def invalidate(connection: A): Task[Unit]
+  def invalidate(connection: A): IO[Unit]
 }
 
 object ConnectionManager {

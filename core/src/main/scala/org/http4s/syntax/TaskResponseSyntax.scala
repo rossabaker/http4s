@@ -1,14 +1,14 @@
 package org.http4s
 package syntax
 
-import fs2.Task
+import cats.effect.IO
 
 trait TaskResponseSyntax {
-  implicit def http4sTaskResponseSyntax(resp: Task[Response]): TaskResponseOps =
+  implicit def http4sTaskResponseSyntax(resp: IO[Response]): TaskResponseOps =
     new TaskResponseOps(resp)
 }
 
-final class TaskResponseOps(val self: Task[Response])
+final class TaskResponseOps(val self: IO[Response])
     extends AnyVal
     with TaskMessageOps[Response]
     with ResponseOps {

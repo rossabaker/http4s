@@ -2,12 +2,12 @@ package org.http4s
 package syntax
 
 import cats.data.EitherT
-import fs2.Task
+import cats.effect.IO
 
 trait TaskMessageOps[M <: Message] extends Any with MessageOps {
-  type Self = Task[M#Self]
+  type Self = IO[M#Self]
 
-  def self: Task[M]
+  def self: IO[M]
 
   def transformHeaders(f: Headers => Headers): Self =
     self.map(_.transformHeaders(f))
