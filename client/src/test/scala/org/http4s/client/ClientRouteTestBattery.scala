@@ -43,7 +43,7 @@ abstract class ClientRouteTestBattery(name: String, client: Client)
         Request(uri = uri)
       }
       val url = Uri.fromString(s"http://${address.getHostName}:${address.getPort}$path").yolo
-      val f = (0 until 10).map(_ => Task.fork {
+      val f = (0 until 50).map(_ => Task.fork {
         val resp = fetchBody.run(url)
         resp.map(_.length)
       })
