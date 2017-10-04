@@ -3,6 +3,7 @@ package server
 package tomcat
 
 import cats.effect._
+import java.nio.file.Paths
 import java.util
 import java.net.InetSocketAddress
 import javax.servlet.{DispatcherType, Filter}
@@ -137,7 +138,8 @@ sealed class TomcatBuilder[F[_]: Effect] private (
   override def start: F[Server[F]] = F.delay {
     val tomcat = new Tomcat
 
-    tomcat.addContext("", getClass.getResource("/").getPath)
+    val docBase = Paths.get(".").toAbsolutePath.normalize.toString
+    tomcat.addContext("", docBase)
 
     val conn = tomcat.getConnector()
 
