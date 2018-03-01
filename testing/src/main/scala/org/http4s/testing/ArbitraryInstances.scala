@@ -157,10 +157,14 @@ trait ArbitraryInstances {
 
   implicit val arbitraryHttpVersion: Arbitrary[HttpVersion] =
     Arbitrary {
-      for {
-        major <- choose(0, 9)
-        minor <- choose(0, 9)
-      } yield HttpVersion.fromVersion(major, minor).yolo
+      oneOf(
+        const(HttpVersion.`HTTP/1.0`),
+        const(HttpVersion.`HTTP/1.1`),
+        (for {
+          major <- choose(0, Int.MaxValue)
+          minor <- choose(0, Int.MaxValue)
+        } yield HttpVersion.fromVersion(major, minor).yolo)
+      )
     }
 
   implicit val cogenHttpVersion: Cogen[HttpVersion] =

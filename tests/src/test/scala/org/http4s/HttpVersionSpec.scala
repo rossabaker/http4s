@@ -2,8 +2,8 @@ package org.http4s
 
 import cats.implicits._
 import cats.kernel.laws.discipline.OrderTests
-import org.scalacheck.Gen._
 import org.scalacheck.Prop._
+import org.specs2.scalacheck.Parameters
 
 class HttpVersionSpec extends Http4sSpec {
   import HttpVersion._
@@ -17,11 +17,9 @@ class HttpVersionSpec extends Http4sSpec {
   }
 
   "sort by descending minor version if major versions equal" in {
-    forAll(choose(0, 9), choose(0, 9), choose(0, 9)) { (major, xMinor, yMinor) =>
-      val x = HttpVersion.fromVersion(major, xMinor).yolo
-      val y = HttpVersion.fromVersion(major, yMinor).yolo
-      (xMinor > yMinor) ==> (x > y)
-    }
+    prop { (x: HttpVersion, y: HttpVersion) =>
+      (x.major == y.major && x.minor > y.minor) ==> (x > y)
+    }.setParameters(Parameters(maxDiscardRatio = 10.0f))
   }
 
   "fromString is consistent with toString" in {

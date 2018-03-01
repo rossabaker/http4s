@@ -38,7 +38,7 @@ object HttpVersion extends HttpVersionInstances {
       extends org.http4s.internal.parboiled2.Parser
       with Rfc2616BasicRules {
     def HttpVersion: Rule1[org.http4s.HttpVersion] = rule {
-      "HTTP/" ~ capture(Digit) ~ "." ~ capture(Digit) ~> { (major: String, minor: String) =>
+      "HTTP/" ~ capture(oneOrMore(Digit)) ~ "." ~ capture(oneOrMore(Digit)) ~> { (major: String, minor: String) =>
         new HttpVersion(major.toInt, minor.toInt)
       }
     }
@@ -46,9 +46,7 @@ object HttpVersion extends HttpVersionInstances {
 
   def fromVersion(major: Int, minor: Int): ParseResult[HttpVersion] =
     if (major < 0) ParseResult.fail("Invalid HTTP version", s"major must be > 0: $major")
-    else if (major > 9) ParseResult.fail("Invalid HTTP version", s"major must be <= 9: $major")
     else if (minor < 0) ParseResult.fail("Invalid HTTP version", s"major must be > 0: $minor")
-    else if (minor > 9) ParseResult.fail("Invalid HTTP version", s"major must be <= 9: $minor")
     else ParseResult.success(new HttpVersion(major, minor))
 }
 
