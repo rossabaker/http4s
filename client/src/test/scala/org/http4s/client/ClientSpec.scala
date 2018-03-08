@@ -7,10 +7,10 @@ import org.http4s.Method._
 import org.http4s.Status.Ok
 
 class ClientSpec extends Http4sSpec {
-  val service = HttpPartial[IO] {
+  val service = Http.fromPartial[IO] {
     case r => Response[IO](Ok).withBody(r.body)
   }
-  val client: Client[IO] = Client.fromHttpService(service)
+  val client: Client[IO] = Client.fromHttp(service)
 
   "mock client" should {
     "read body before dispose" in {
@@ -31,7 +31,7 @@ class ClientSpec extends Http4sSpec {
     }
 
     "fail to read body after client shutdown" in {
-      val client: Client[IO] = Client.fromHttpService(service)
+      val client: Client[IO] = Client.fromHttp(service)
       client.shutdownNow()
       client.expect[String](Request[IO](POST).withBody("foo")).attempt.unsafeRunSync() must beLeft
         .like {

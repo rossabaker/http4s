@@ -11,12 +11,12 @@ import scala.concurrent.duration._
 
 class RetrySpec extends Http4sSpec with Tables {
 
-  val route = HttpPartial[IO] {
+  val route = Http.fromPartial[IO] {
     case _ -> Root / status =>
       IO.pure(Response(Status.fromInt(status.toInt).valueOr(throw _)))
   }
 
-  val defaultClient: Client[IO] = Client.fromHttpService(route)
+  val defaultClient: Client[IO] = Client.fromHttp(route)
 
   def countRetries(
       client: Client[IO],

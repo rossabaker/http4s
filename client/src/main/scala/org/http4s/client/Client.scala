@@ -10,6 +10,7 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 import org.http4s.Status.Successful
 import org.http4s.headers.{Accept, MediaRangeAndQValue}
+import org.http4s.syntax.kleisli._
 import scala.concurrent.SyncVar
 import scala.util.control.NoStackTrace
 import org.log4s.getLogger
@@ -99,6 +100,13 @@ final case class Client[F[_]](
   def toService[A](f: Response[F] => F[A]): Service[F, Request[F], A] =
     toKleisli(f)
 
+  def toHttp: Http[F] =
+    open
+      .map {
+        case DisposableResponse(response, dispose) =>
+          response.copy(body = response.body.onFinalize(dispose))
+      }
+
   /**
     * Returns this client as an [[HttpService]].  It is the responsibility of
     * callers of this service to run the response body to dispose of the
@@ -108,13 +116,9 @@ final case class Client[F[_]](
     * [[toKleisli]], and [[streaming]] are safer alternatives, as their
     * signatures guarantee disposal of the HTTP connection.
     */
+  @deprecated("Use toHttp, which returns a total function", "0.19")
   def toHttpService: HttpPartial[F] =
-    open
-      .map {
-        case DisposableResponse(response, dispose) =>
-          response.copy(body = response.body.onFinalize(dispose))
-      }
-      .mapF(OptionT.liftF(_))
+    toHttp.mapK(OptionT.liftK)
 
   def streaming[A](req: Request[F])(f: Response[F] => Stream[F, A]): Stream[F, A] =
     Stream
@@ -264,7 +268,7 @@ object Client {
     *
     * @param service the service to respond to requests to this client
     */
-  def fromHttpService[F[_]](service: HttpPartial[F])(implicit F: Sync[F]): Client[F] = {
+  def fromHttp[F[_]](service: Http[F])(implicit F: Sync[F]): Client[F] = {
     val isShutdown = new AtomicBoolean(false)
 
     def interruptible(body: EntityBody[F], disposed: AtomicBoolean): Stream[F, Byte] = {
@@ -288,11 +292,11 @@ object Client {
         .through(killable("client was shut down", isShutdown))
     }
 
-    def disposableService(service: HttpPartial[F]): Kleisli[F, Request[F], DisposableResponse[F]] =
+    val disposableService: Kleisli[F, Request[F], DisposableResponse[F]] =
       Kleisli { req: Request[F] =>
         val disposed = new AtomicBoolean(false)
         val req0 = req.withBodyStream(interruptible(req.body, disposed))
-        service(req0).getOrElse(Response.notFound).map { resp =>
+        service(req0).map { resp =>
           DisposableResponse(
             resp.copy(body = interruptible(resp.body, disposed)),
             F.delay(disposed.set(true))
@@ -300,8 +304,12 @@ object Client {
         }
       }
 
-    Client(disposableService(service), F.delay(isShutdown.set(true)))
+    Client(disposableService, F.delay(isShutdown.set(true)))
   }
+
+  @deprecated("Use fromHttp with a total function", "0.19")
+  def fromHttpService[F[_]](service: HttpPartial[F])(implicit F: Sync[F]): Client[F] =
+    fromHttp(service.orNotFound)
 }
 
 final case class UnexpectedStatus(status: Status) extends RuntimeException with NoStackTrace {

@@ -15,7 +15,7 @@ class FollowRedirectSpec extends Http4sSpec with Http4sClientDsl[IO] with Tables
 
   private val loopCounter = new AtomicInteger(0)
 
-  val service = HttpPartial[IO] {
+  val service = Http.fromPartial[IO] {
     case req @ _ -> Root / "ok" =>
       Ok(
         req.body,
@@ -33,7 +33,7 @@ class FollowRedirectSpec extends Http4sSpec with Http4sClientDsl[IO] with Tables
         .pure[IO]
   }
 
-  val defaultClient = Client.fromHttpService(service)
+  val defaultClient = Client.fromHttp(service)
   val client = FollowRedirect(3)(defaultClient)
 
   case class RedirectResponse(
@@ -131,12 +131,12 @@ class FollowRedirectSpec extends Http4sSpec with Http4sClientDsl[IO] with Tables
     }.pendingUntilFixed
 
     "Not redirect more than 'maxRedirects' iterations" in {
-      val statefulService = HttpPartial[IO] {
+      val statefulService = Http.fromPartial[IO] {
         case GET -> Root / "loop" =>
           val body = loopCounter.incrementAndGet.toString
           MovedPermanently(Location(uri("/loop"))).flatMap(_.withBody(body))
       }
-      val client = FollowRedirect(3)(Client.fromHttpService(statefulService))
+      val client = FollowRedirect(3)(Client.fromHttp(statefulService))
       client.fetch(Request[IO](uri = uri("http://localhost/loop"))) {
         case MovedPermanently(resp) => resp.as[String].map(_.toInt)
         case _ => IO.pure(-1)
@@ -145,7 +145,7 @@ class FollowRedirectSpec extends Http4sSpec with Http4sClientDsl[IO] with Tables
 
     "Dispose of original response when redirecting" in {
       var disposed = 0
-      val disposingService = service.orNotFound.map { mr =>
+      val disposingService = service.map { mr =>
         DisposableResponse(mr, IO { disposed = disposed + 1; () })
       }
       val client = FollowRedirect(3)(Client(disposingService, IO.unit))

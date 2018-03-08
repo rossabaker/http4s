@@ -12,7 +12,7 @@ import org.specs2.matcher.MustThrownMatchers
 
 class ClientSyntaxSpec extends Http4sSpec with Http4sClientDsl[IO] with MustThrownMatchers {
 
-  val route = HttpPartial[IO] {
+  val route = Http.fromPartial[IO] {
     case r if r.method == GET && r.pathInfo == "/" =>
       Response[IO](Ok).withBody("hello")
     case r if r.method == PUT && r.pathInfo == "/put" =>
@@ -26,7 +26,7 @@ class ClientSyntaxSpec extends Http4sSpec with Http4sClientDsl[IO] with MustThro
     case r => sys.error("Path not found: " + r.pathInfo)
   }
 
-  val client: Client[IO] = Client.fromHttpService(route)
+  val client: Client[IO] = Client.fromHttp(route)
 
   val req: Request[IO] = Request(GET, uri("http://www.foo.bar/"))
 
@@ -38,7 +38,7 @@ class ClientSyntaxSpec extends Http4sSpec with Http4sClientDsl[IO] with MustThro
       disposed = true
       ()
     }
-    val disposingClient = Client(route.orNotFound.map(r => DisposableResponse(r, dispose)), IO.unit)
+    val disposingClient = Client(route.map(r => DisposableResponse(r, dispose)), IO.unit)
     f(disposingClient).attempt.unsafeRunSync()
     disposed must beTrue
   }
@@ -237,23 +237,23 @@ class ClientSyntaxSpec extends Http4sSpec with Http4sClientDsl[IO] with MustThro
       assertDisposes(_.toKleisli(_ => IO.raiseError(SadTrombone)).run(req))
     }
 
-    "toHttpService disposes the response if the body is run" in {
-      assertDisposes(_.toHttpService.orNotFound.flatMapF(_.body.compile.drain).run(req))
+    "toHttp disposes the response if the body is run" in {
+      assertDisposes(_.toHttp.flatMapF(_.body.compile.drain).run(req))
     }
 
-    "toHttpService disposes of the response if the body is run, even if it fails" in {
+    "toHttp disposes of the response if the body is run, even if it fails" in {
       assertDisposes(
-        _.toHttpService.orNotFound
+        _.toHttp
           .flatMapF(_.body.flatMap(_ => Stream.raiseError(SadTrombone)).compile.drain)
           .run(req))
     }
 
-    "toHttpService allows the response to be read" in {
-      client.toHttpService.orNotFound(req).flatMap(_.as[String]) must returnValue("hello")
+    "toHttp allows the response to be read" in {
+      client.toHttp(req).flatMap(_.as[String]) must returnValue("hello")
     }
 
-    "toHttpService allows the response to be read" in {
-      client.toHttpService.orNotFound(req).flatMap(_.as[String]) must returnValue("hello")
+    "toHttp allows the response to be read" in {
+      client.toHttp(req).flatMap(_.as[String]) must returnValue("hello")
     }
   }
 
