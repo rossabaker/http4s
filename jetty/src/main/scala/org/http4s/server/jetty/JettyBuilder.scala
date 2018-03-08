@@ -16,6 +16,7 @@ import org.eclipse.jetty.util.ssl.SslContextFactory
 import org.eclipse.jetty.util.thread.QueuedThreadPool
 import org.http4s.server.SSLKeyStoreSupport.StoreInfo
 import org.http4s.servlet.{Http4sServlet, ServletContainer, ServletIo}
+import org.http4s.syntax.kleisli._
 import org.log4s.getLogger
 import scala.concurrent.ExecutionContext
 import scala.collection.immutable
@@ -108,7 +109,7 @@ sealed class JettyBuilder[F[_]: Effect] private (
   override def mountService(service: HttpPartial[F], prefix: String): Self =
     copy(mounts = mounts :+ Mount[F] { (context, index, builder) =>
       val servlet = new Http4sServlet(
-        service = service,
+        service = service.orNotFound,
         asyncTimeout = builder.asyncTimeout,
         servletIo = builder.servletIo,
         executionContext = builder.executionContext,

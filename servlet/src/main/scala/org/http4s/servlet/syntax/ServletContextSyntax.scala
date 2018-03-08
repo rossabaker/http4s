@@ -5,6 +5,7 @@ package syntax
 import cats.effect._
 import javax.servlet.{ServletContext, ServletRegistration}
 import org.http4s.server.{AsyncTimeoutSupport, DefaultServiceErrorHandler}
+import org.http4s.syntax.kleisli._
 import scala.concurrent.ExecutionContext
 
 trait ServletContextSyntax {
@@ -18,7 +19,7 @@ final class ServletContextOps private[syntax] (val self: ServletContext) extends
   def mountService[F[_]: Effect](name: String, service: HttpPartial[F], mapping: String = "/*")(
       implicit ec: ExecutionContext = ExecutionContext.global): ServletRegistration.Dynamic = {
     val servlet = new Http4sServlet(
-      service = service,
+      service = service.orNotFound,
       asyncTimeout = AsyncTimeoutSupport.DefaultAsyncTimeout,
       executionContext = ec,
       servletIo = servletIo,

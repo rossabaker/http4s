@@ -15,7 +15,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
 
 class Http4sServlet[F[_]](
-    service: HttpPartial[F],
+    service: Http[F],
     asyncTimeout: Duration = Duration.Inf,
     implicit private[this] val executionContext: ExecutionContext = ExecutionContext.global,
     private[this] var servletIo: ServletIo[F],
@@ -98,7 +98,7 @@ class Http4sServlet[F[_]](
     ctx.addListener(new AsyncTimeoutHandler(request, bodyWriter))
     // Note: We're catching silly user errors in the lift => flatten.
     val response = F.shift(executionContext) *> F
-      .delay(serviceFn(request).getOrElse(Response.notFound))
+      .delay(serviceFn(request))
       .flatten
       .handleErrorWith(serviceErrorHandler(request))
 
@@ -203,7 +203,7 @@ class Http4sServlet[F[_]](
 
 object Http4sServlet {
   def apply[F[_]: Effect](
-      service: HttpPartial[F],
+      service: Http[F],
       asyncTimeout: Duration = Duration.Inf,
       executionContext: ExecutionContext = ExecutionContext.global): Http4sServlet[F] =
     new Http4sServlet[F](

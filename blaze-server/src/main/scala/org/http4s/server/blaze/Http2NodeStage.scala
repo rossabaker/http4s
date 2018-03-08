@@ -26,7 +26,7 @@ private class Http2NodeStage[F[_]](
     timeout: Duration,
     implicit private val executionContext: ExecutionContext,
     attributes: AttributeMap,
-    service: HttpPartial[F],
+    service: Http[F],
     serviceErrorHandler: ServiceErrorHandler[F])(implicit F: Effect[F])
     extends TailStage[NodeMsg.Http2Msg] {
 
@@ -188,7 +188,6 @@ private class Http2NodeStage[F[_]](
         def run(): Unit =
           F.runAsync {
               try service(req)
-                .getOrElse(Response.notFound)
                 .recoverWith(serviceErrorHandler(req))
                 .handleError(_ => Response(InternalServerError, req.httpVersion))
                 .map(renderResponse)

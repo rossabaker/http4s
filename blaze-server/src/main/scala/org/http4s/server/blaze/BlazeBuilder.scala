@@ -149,6 +149,7 @@ class BlazeBuilder[F[_]](
 
   def start: F[Server[F]] = F.delay {
     val aggregateService = Router(serviceMounts.map(mount => mount.prefix -> mount.service): _*)
+      .mapF(_.getOrElse(Response.notFound[F]))
 
     def resolveAddress(address: InetSocketAddress) =
       if (address.isUnresolved) new InetSocketAddress(address.getHostName, address.getPort)

@@ -14,7 +14,7 @@ import scala.concurrent.duration.Duration
 private[blaze] object ProtocolSelector {
   def apply[F[_]: Effect](
       engine: SSLEngine,
-      service: HttpPartial[F],
+      service: Http[F],
       maxRequestLineLen: Int,
       maxHeadersLen: Int,
       requestAttributes: AttributeMap,
