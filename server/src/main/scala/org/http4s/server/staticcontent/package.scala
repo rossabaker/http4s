@@ -12,15 +12,15 @@ import org.http4s.headers.`Accept-Ranges`
 package object staticcontent {
 
   /** Make a new [[org.http4s.HttpService]] that serves static files, possibly from the classpath. */
-  def resourceService[F[_]: Effect](config: ResourceService.Config[F]): HttpService[F] =
+  def resourceService[F[_]: Effect](config: ResourceService.Config[F]): HttpPartial[F] =
     ResourceService(config)
 
-  /** Make a new [[org.http4s.HttpService]] that serves static files. */
-  def fileService[F[_]: Effect](config: FileService.Config[F]): HttpService[F] =
+  /** Make a new [[org.http4s.HttpPartial]] that serves static files. */
+  def fileService[F[_]: Effect](config: FileService.Config[F]): HttpPartial[F] =
     FileService(config)
 
-  /** Make a new [[org.http4s.HttpService]] that serves static files from webjars */
-  def webjarService[F[_]: Effect](config: WebjarService.Config[F]): HttpService[F] =
+  /** Make a new [[org.http4s.HttpPartial]] that serves static files from webjars */
+  def webjarService[F[_]: Effect](config: WebjarService.Config[F]): HttpPartial[F] =
     WebjarService(config)
 
   private[staticcontent] val AcceptRangeHeader = `Accept-Ranges`(RangeUnit.Bytes)

@@ -5,7 +5,7 @@ import cats.data.Validated._
 import cats.effect.IO
 import org.http4s.dsl.io._
 
-object PathInHttpServiceSpec extends Http4sSpec {
+object PathInHttpPartialSpec extends Http4sSpec {
 
   object List {
     def unapplySeq(params: Map[String, Seq[String]]) = params.get("list")
@@ -30,7 +30,7 @@ object PathInHttpServiceSpec extends Http4sSpec {
 
   object MultiOptCounter extends OptionalMultiQueryParamDecoderMatcher[Int]("counter")
 
-  val service: HttpService[IO] = HttpService {
+  val service: HttpPartial[IO] = HttpPartial {
     case GET -> Root :? I(start) +& L(limit) =>
       Ok(s"start: $start, limit: ${limit.l}")
     case GET -> Root / LongVar(id) =>
@@ -73,7 +73,7 @@ object PathInHttpServiceSpec extends Http4sSpec {
   def serve(req: Request[IO]): Response[IO] =
     service.orNotFound(req).unsafeRunSync
 
-  "Path DSL within HttpService" should {
+  "Path DSL within HttpPartial" should {
     "GET /" in {
       val response = serve(Request(GET, Uri(path = "/")))
       response.status must_== (Ok)

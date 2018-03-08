@@ -8,7 +8,7 @@ import org.http4s.server.middleware.PushSupport._
 
 object MockRoute extends Http4s {
 
-  def route(): HttpService[IO] = HttpService {
+  def route(): HttpPartial[IO] = HttpPartial {
     case req if req.uri.path === "/ping" =>
       Response[IO](Ok).withBody("pong")
 

@@ -10,9 +10,9 @@ import java.util.concurrent.atomic._
 import org.http4s.syntax.kleisli._
 
 object MockClient {
-  def apply[F[_]: Sync](service: HttpService[F]): Client[F] = apply(service, ().pure[F])
+  def apply[F[_]: Sync](service: HttpPartial[F]): Client[F] = apply(service, ().pure[F])
 
-  def apply[F[_]](service: HttpService[F], dispose: F[Unit])(implicit F: Sync[F]): Client[F] = {
+  def apply[F[_]](service: HttpPartial[F], dispose: F[Unit])(implicit F: Sync[F]): Client[F] = {
     val isShutdown = new AtomicBoolean(false)
 
     def interruptable(body: EntityBody[F], disposed: AtomicBoolean): Stream[F, Byte] = {
@@ -36,7 +36,7 @@ object MockClient {
         .through(killable("client was shut down", isShutdown))
     }
 
-    def disposableService(service: HttpService[F]): Kleisli[F, Request[F], DisposableResponse[F]] =
+    def disposableService(service: HttpPartial[F]): Kleisli[F, Request[F], DisposableResponse[F]] =
       Kleisli { req =>
         val disposed = new AtomicBoolean(false)
         val req0 = req.withBodyStream(interruptable(req.body, disposed))

@@ -5,7 +5,7 @@ package middleware
 import cats.Functor
 
 object URITranslation {
-  def translateRoot[F[_]: Functor](prefix: String)(service: HttpService[F]): HttpService[F] = {
+  def translateRoot[F[_]: Functor](prefix: String)(service: HttpPartial[F]): HttpPartial[F] = {
     val newCaret = prefix match {
       case "/" => 0
       case x if x.startsWith("/") => x.length

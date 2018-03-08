@@ -9,7 +9,7 @@ import com.example.http4s.blaze.demo.server.endpoints.auth.{
 }
 import com.example.http4s.blaze.demo.server.service.{FileService, GitHubService}
 import fs2.Scheduler
-import org.http4s.HttpService
+import org.http4s.HttpPartial
 import org.http4s.client.Client
 import org.http4s.server.HttpMiddleware
 import org.http4s.server.middleware.{AutoSlash, ChunkAggregator, GZip, Timeout}
@@ -23,42 +23,42 @@ class Module[F[_]](client: Client[F])(implicit F: Effect[F], S: Scheduler) {
 
   private val gitHubService = new GitHubService[F](client)
 
-  def middleware: HttpMiddleware[F] = { (service: HttpService[F]) =>
+  def middleware: HttpMiddleware[F] = { (service: HttpPartial[F]) =>
     GZip(service)(F)
   }.compose { service =>
     AutoSlash(service)(F)
   }
 
-  val fileHttpEndpoint: HttpService[F] =
+  val fileHttpEndpoint: HttpPartial[F] =
     new FileHttpEndpoint[F](fileService).service
 
   val nonStreamFileHttpEndpoint = ChunkAggregator(fileHttpEndpoint)
 
-  private val hexNameHttpEndpoint: HttpService[F] =
+  private val hexNameHttpEndpoint: HttpPartial[F] =
     new HexNameHttpEndpoint[F].service
 
-  private val compressedEndpoints: HttpService[F] =
+  private val compressedEndpoints: HttpPartial[F] =
     middleware(hexNameHttpEndpoint)
 
-  private val timeoutHttpEndpoint: HttpService[F] =
+  private val timeoutHttpEndpoint: HttpPartial[F] =
     new TimeoutHttpEndpoint[F].service
 
-  private val timeoutEndpoints: HttpService[F] =
+  private val timeoutEndpoints: HttpPartial[F] =
     Timeout(1.second)(timeoutHttpEndpoint)
 
-  private val mediaHttpEndpoint: HttpService[F] =
+  private val mediaHttpEndpoint: HttpPartial[F] =
     new JsonXmlHttpEndpoint[F].service
 
-  private val multipartHttpEndpoint: HttpService[F] =
+  private val multipartHttpEndpoint: HttpPartial[F] =
     new MultipartHttpEndpoint[F](fileService).service
 
-  private val gitHubHttpEndpoint: HttpService[F] =
+  private val gitHubHttpEndpoint: HttpPartial[F] =
     new GitHubHttpEndpoint[F](gitHubService).service
 
-  val basicAuthHttpEndpoint: HttpService[F] =
+  val basicAuthHttpEndpoint: HttpPartial[F] =
     new BasicAuthHttpEndpoint[F].service
 
-  val httpServices: HttpService[F] = (
+  val httpServices: HttpPartial[F] = (
     compressedEndpoints <+> timeoutEndpoints
       <+> mediaHttpEndpoint <+> multipartHttpEndpoint
       <+> gitHubHttpEndpoint

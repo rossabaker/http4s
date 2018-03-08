@@ -11,7 +11,7 @@ import scodec.bits.ByteVector
 
 private[staticcontent] trait StaticContentShared { this: Http4sSpec =>
 
-  def s: HttpService[IO]
+  def s: HttpPartial[IO]
 
   lazy val testResource: Chunk[Byte] = {
     val s = getClass.getResourceAsStream("/testresource.txt")

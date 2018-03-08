@@ -16,7 +16,7 @@ class GZipSpec extends Http4sSpec {
 
   "GZip" should {
     "fall through if the route doesn't match" in {
-      val service = GZip(HttpService.empty[IO]) <+> HttpService[IO] {
+      val service = GZip(HttpPartial.empty[IO]) <+> HttpPartial[IO] {
         case GET -> Root => Ok("pong")
       }
       val req =
@@ -28,12 +28,12 @@ class GZipSpec extends Http4sSpec {
 
     "encodes random content-type if given isZippable is true" in {
       val response = "Response string"
-      val service: HttpService[IO] = HttpService[IO] {
+      val service: HttpPartial[IO] = HttpPartial[IO] {
         case GET -> Root =>
           Ok(response, Header("Content-Type", "random-type; charset=utf-8"))
       }
 
-      val gzipService: HttpService[IO] = GZip(service, isZippable = (_) => true)
+      val gzipService: HttpPartial[IO] = GZip(service, isZippable = (_) => true)
 
       val req: Request[IO] = Request[IO](Method.GET, Uri.uri("/"))
         .putHeaders(`Accept-Encoding`(ContentCoding.gzip))
@@ -53,10 +53,10 @@ class GZipSpec extends Http4sSpec {
       new Properties("GZip") {
         property("middleware encoding == GZIPOutputStream encoding") = forAll {
           vector: Vector[Array[Byte]] =>
-            val service: HttpService[IO] = HttpService[IO] {
+            val service: HttpPartial[IO] = HttpPartial[IO] {
               case GET -> Root => Ok(Stream.emits(vector).covary[IO])
             }
-            val gzipService: HttpService[IO] = GZip(service)
+            val gzipService: HttpPartial[IO] = GZip(service)
             val req: Request[IO] = Request[IO](Method.GET, Uri.uri("/"))
               .putHeaders(`Accept-Encoding`(ContentCoding.gzip))
             val actual: IO[Array[Byte]] =

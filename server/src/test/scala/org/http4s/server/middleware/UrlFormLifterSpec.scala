@@ -8,7 +8,7 @@ import org.http4s.dsl.io._
 class UrlFormLifterSpec extends Http4sSpec {
   val urlForm = UrlForm("foo" -> "bar")
 
-  val service = UrlFormLifter(HttpService[IO] {
+  val service = UrlFormLifter(HttpPartial[IO] {
     case r @ POST -> _ =>
       r.uri.multiParams.get("foo") match {
         case Some(ps) =>

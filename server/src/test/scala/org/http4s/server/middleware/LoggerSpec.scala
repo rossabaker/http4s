@@ -12,7 +12,7 @@ import scala.io.Source
   */
 class LoggerSpec extends Http4sSpec {
 
-  val testService = HttpService[IO] {
+  val testService = HttpPartial[IO] {
     case GET -> Root / "request" =>
       Ok("request response")
     case req @ POST -> Root / "post" =>

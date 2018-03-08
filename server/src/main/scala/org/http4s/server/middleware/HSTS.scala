@@ -17,20 +17,20 @@ object HSTS {
     includeSubDomains = true,
     preload = false)
 
-  def apply[F[_]: Functor](service: HttpService[F]): HttpService[F] =
+  def apply[F[_]: Functor](service: HttpPartial[F]): HttpPartial[F] =
     apply(service, defaultHSTSPolicy)
 
   def apply[F[_]: Functor](
-      service: HttpService[F],
-      header: `Strict-Transport-Security`): HttpService[F] = Kleisli { req =>
+      service: HttpPartial[F],
+      header: `Strict-Transport-Security`): HttpPartial[F] = Kleisli { req =>
     service.map(_.putHeaders(header)).apply(req)
   }
 
   def unsafeFromDuration[F[_]: Functor](
-      service: HttpService[F],
+      service: HttpPartial[F],
       maxAge: FiniteDuration = 365.days,
       includeSubDomains: Boolean = true,
-      preload: Boolean = false): HttpService[F] = {
+      preload: Boolean = false): HttpPartial[F] = {
     val header = `Strict-Transport-Security`.unsafeFromDuration(maxAge, includeSubDomains, preload)
 
     apply(service, header)

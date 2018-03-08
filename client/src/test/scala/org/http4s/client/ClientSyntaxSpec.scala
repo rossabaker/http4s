@@ -12,7 +12,7 @@ import org.specs2.matcher.MustThrownMatchers
 
 class ClientSyntaxSpec extends Http4sSpec with Http4sClientDsl[IO] with MustThrownMatchers {
 
-  val route = HttpService[IO] {
+  val route = HttpPartial[IO] {
     case r if r.method == GET && r.pathInfo == "/" =>
       Response[IO](Ok).withBody("hello")
     case r if r.method == PUT && r.pathInfo == "/put" =>

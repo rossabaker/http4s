@@ -21,8 +21,8 @@ object Timeout {
     * @param timeoutResponse F[Response] to race against the result of the service. This will be run for each [[Request]]
     * @param service [[org.http4s.HttpService]] to transform
     */
-  private def race[F[_]: Effect](timeoutResponse: F[Response[F]])(service: HttpService[F])(
-      implicit executionContext: ExecutionContext): HttpService[F] =
+  private def race[F[_]: Effect](timeoutResponse: F[Response[F]])(service: HttpPartial[F])(
+      implicit executionContext: ExecutionContext): HttpPartial[F] =
     service.mapF { resp =>
       OptionT(fs2AsyncRace(resp.value, timeoutResponse.map(_.some)).map(_.merge))
     }
@@ -66,19 +66,19 @@ object Timeout {
     *
     * @param timeout Duration to wait before returning the
     * RequestTimeOut
-    * @param service [[HttpService]] to transform
+    * @param service [[HttpPartial]] to transform
     */
-  def apply[F[_]: Effect](timeout: Duration, response: F[Response[F]])(service: HttpService[F])(
+  def apply[F[_]: Effect](timeout: Duration, response: F[Response[F]])(service: HttpPartial[F])(
       implicit executionContext: ExecutionContext,
-      scheduler: Scheduler): HttpService[F] =
+      scheduler: Scheduler): HttpPartial[F] =
     timeout match {
       case fd: FiniteDuration => race(scheduler.effect.delay(response, fd))(service)
       case _ => service
     }
 
-  def apply[F[_]: Effect](timeout: Duration)(service: HttpService[F])(
+  def apply[F[_]: Effect](timeout: Duration)(service: HttpPartial[F])(
       implicit executionContext: ExecutionContext,
-      scheduler: Scheduler): HttpService[F] =
+      scheduler: Scheduler): HttpPartial[F] =
     apply(timeout, Response[F](Status.InternalServerError).withBody("The service timed out."))(
       service)
 }

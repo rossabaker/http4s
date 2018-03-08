@@ -9,7 +9,7 @@ import scala.concurrent.duration._
 
 class HSTSSpec extends Http4sSpec {
 
-  val innerService = HttpService[IO] {
+  val innerService = HttpPartial[IO] {
     case GET -> Root =>
       Ok("pong")
   }

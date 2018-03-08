@@ -44,7 +44,7 @@ object PushSupport {
       r: Vector[PushLocation],
       req: Request[F],
       verify: String => Boolean,
-      route: HttpService[F])(implicit F: Monad[F]): F[Vector[PushResponse[F]]] =
+      route: HttpPartial[F])(implicit F: Monad[F]): F[Vector[PushResponse[F]]] =
     r.foldLeft(F.pure(Vector.empty[PushResponse[F]])) { (facc, v) =>
       if (verify(v.location)) {
         val newReq = locToRequest(v, req)
@@ -76,13 +76,13 @@ object PushSupport {
 
   /** Transform the route such that requests will gather pushed resources
     *
-    * @param service HttpService to transform
+    * @param service HttpPartial to transform
     * @param verify method that determines if the location should be pushed
     * @return      Transformed route
     */
   def apply[F[_]: Monad](
-      service: HttpService[F],
-      verify: String => Boolean = _ => true): HttpService[F] = {
+      service: HttpPartial[F],
+      verify: String => Boolean = _ => true): HttpPartial[F] = {
 
     def gather(req: Request[F])(resp: Response[F]): Response[F] =
       resp.attributes

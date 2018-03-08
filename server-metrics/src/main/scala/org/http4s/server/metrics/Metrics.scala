@@ -45,7 +45,7 @@ object Metrics {
     Kleisli(metricsService[F](serviceMetrics, service)(_))
   }
 
-  private def metricsService[F[_]: Sync](serviceMetrics: ServiceMetrics, service: HttpService[F])(
+  private def metricsService[F[_]: Sync](serviceMetrics: ServiceMetrics, service: HttpPartial[F])(
       req: Request[F]): OptionT[F, Response[F]] = OptionT {
     for {
       now <- Sync[F].delay(System.nanoTime())

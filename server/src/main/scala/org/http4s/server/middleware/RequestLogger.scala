@@ -20,8 +20,8 @@ object RequestLogger {
       logHeaders: Boolean,
       logBody: Boolean,
       redactHeadersWhen: CaseInsensitiveString => Boolean = Headers.SensitiveHeaders.contains
-  )(service: HttpService[F])(
-      implicit ec: ExecutionContext = ExecutionContext.global): HttpService[F] =
+  )(service: HttpPartial[F])(
+      implicit ec: ExecutionContext = ExecutionContext.global): HttpPartial[F] =
     Kleisli { req =>
       if (!logBody)
         OptionT(

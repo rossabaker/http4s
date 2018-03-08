@@ -20,9 +20,9 @@ object ResponseLogger {
       logHeaders: Boolean,
       logBody: Boolean,
       redactHeadersWhen: CaseInsensitiveString => Boolean = Headers.SensitiveHeaders.contains
-  )(service: HttpService[F])(
+  )(service: HttpPartial[F])(
       implicit F: Effect[F],
-      ec: ExecutionContext = ExecutionContext.global): HttpService[F] =
+      ec: ExecutionContext = ExecutionContext.global): HttpPartial[F] =
     Kleisli { req =>
       service(req).semiflatMap { response =>
         if (!logBody)

@@ -42,7 +42,7 @@ object Issue454 {
   }
 
   val servlet = new Http4sServlet[IO](
-    service = HttpService {
+    service = HttpPartial {
       case GET -> Root => Ok(insanelyHugeData)
     },
     servletIo = org.http4s.servlet.NonBlockingServletIo(4096),

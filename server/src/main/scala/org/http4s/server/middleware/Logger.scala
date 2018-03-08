@@ -16,7 +16,7 @@ object Logger {
       logHeaders: Boolean,
       logBody: Boolean,
       redactHeadersWhen: CaseInsensitiveString => Boolean = Headers.SensitiveHeaders.contains
-  )(httpService: HttpService[F]): HttpService[F] =
+  )(httpService: HttpPartial[F]): HttpPartial[F] =
     ResponseLogger(logHeaders, logBody, redactHeadersWhen)(
       RequestLogger(logHeaders, logBody, redactHeadersWhen)(
         httpService

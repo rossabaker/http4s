@@ -12,7 +12,7 @@ import cats.data.{Kleisli, OptionT}
   * uri = "/foo/" to match the route.
   */
 object AutoSlash {
-  def apply[F[_]: Monad](service: HttpService[F]): HttpService[F] =
+  def apply[F[_]: Monad](service: HttpPartial[F]): HttpPartial[F] =
     Kleisli { req =>
       service(req).orElse {
         val pi = req.pathInfo

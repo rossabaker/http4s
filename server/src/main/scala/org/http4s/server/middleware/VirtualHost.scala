@@ -20,14 +20,14 @@ object VirtualHost {
     * filled in, if possible, using the request Uri or knowledge of the
     * security of the underlying transport protocol.
     */
-  final case class HostService[F[_]](service: HttpService[F], p: Host => Boolean)
+  final case class HostService[F[_]](service: HttpPartial[F], p: Host => Boolean)
 
   /** Create a [[HostService]] that will match based on the exact host string
     * (discounting case) and port, if the port is given. If the port is not
     * given, it is ignored.
     */
   def exact[F[_]](
-      service: HttpService[F],
+      service: HttpPartial[F],
       requestHost: String,
       port: Option[Int] = None): HostService[F] =
     HostService(
@@ -39,7 +39,7 @@ object VirtualHost {
     * given. If the port is not given, it is ignored.
     */
   def wildcard[F[_]](
-      service: HttpService[F],
+      service: HttpPartial[F],
       wildcardHost: String,
       port: Option[Int] = None): HostService[F] =
     regex(service, wildcardHost.replace("*", "\\w+").replace(".", "\\.").replace("-", "\\-"), port)
@@ -49,7 +49,7 @@ object VirtualHost {
     * is given. If the port is not given, it is ignored.
     */
   def regex[F[_]](
-      service: HttpService[F],
+      service: HttpPartial[F],
       hostRegex: String,
       port: Option[Int] = None): HostService[F] = {
     val r = hostRegex.r
@@ -60,7 +60,7 @@ object VirtualHost {
 
   def apply[F[_]](first: HostService[F], rest: HostService[F]*)(
       implicit F: Monad[F],
-      W: EntityEncoder[F, String]): HttpService[F] =
+      W: EntityEncoder[F, String]): HttpPartial[F] =
     Kleisli { req =>
       req.headers
         .get(Host)

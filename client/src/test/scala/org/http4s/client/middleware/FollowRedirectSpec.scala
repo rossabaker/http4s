@@ -15,7 +15,7 @@ class FollowRedirectSpec extends Http4sSpec with Http4sClientDsl[IO] with Tables
 
   private val loopCounter = new AtomicInteger(0)
 
-  val service = HttpService[IO] {
+  val service = HttpPartial[IO] {
     case req @ _ -> Root / "ok" =>
       Ok(
         req.body,
@@ -131,7 +131,7 @@ class FollowRedirectSpec extends Http4sSpec with Http4sClientDsl[IO] with Tables
     }.pendingUntilFixed
 
     "Not redirect more than 'maxRedirects' iterations" in {
-      val statefulService = HttpService[IO] {
+      val statefulService = HttpPartial[IO] {
         case GET -> Root / "loop" =>
           val body = loopCounter.incrementAndGet.toString
           MovedPermanently(Location(uri("/loop"))).flatMap(_.withBody(body))

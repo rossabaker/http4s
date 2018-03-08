@@ -96,7 +96,7 @@ final class CSRF[F[_]] private[middleware] (
     */
   private[middleware] def validateOrEmbed(
       r: Request[F],
-      service: HttpService[F]): OptionT[F, Response[F]] =
+      service: HttpPartial[F]): OptionT[F, Response[F]] =
     CSRF.cookieFromHeaders(r, cookieName) match {
       case Some(c) =>
         OptionT.liftF(
@@ -111,7 +111,7 @@ final class CSRF[F[_]] private[middleware] (
     }
 
   /** Check for CSRF validity for an unsafe action. **/
-  private[middleware] def checkCSRF(r: Request[F], service: HttpService[F]): F[Response[F]] =
+  private[middleware] def checkCSRF(r: Request[F], service: HttpPartial[F]): F[Response[F]] =
     (for {
       c1 <- OptionT.fromOption[F](CSRF.cookieFromHeaders(r, cookieName))
       c2 <- OptionT.fromOption[F](r.headers.get(CaseInsensitiveString(headerName)))
@@ -126,7 +126,7 @@ final class CSRF[F[_]] private[middleware] (
   private[middleware] def filter(
       predicate: Request[F] => Boolean,
       r: Request[F],
-      service: HttpService[F]): OptionT[F, Response[F]] =
+      service: HttpPartial[F]): OptionT[F, Response[F]] =
     if (predicate(r)) {
       validateOrEmbed(r, service)
     } else {

@@ -8,7 +8,7 @@ import org.http4s.server.staticcontent.WebjarService.Config
 
 object WebjarServiceSpec extends Http4sSpec with StaticContentShared {
 
-  def s: HttpService[IO] = webjarService(Config[IO]())
+  def s: HttpPartial[IO] = webjarService(Config[IO]())
 
   "The WebjarService" should {
 

@@ -108,7 +108,7 @@ final case class Client[F[_]](
     * [[toKleisli]], and [[streaming]] are safer alternatives, as their
     * signatures guarantee disposal of the HTTP connection.
     */
-  def toHttpService: HttpService[F] =
+  def toHttpService: HttpPartial[F] =
     open
       .map {
         case DisposableResponse(response, dispose) =>
@@ -264,7 +264,7 @@ object Client {
     *
     * @param service the service to respond to requests to this client
     */
-  def fromHttpService[F[_]](service: HttpService[F])(implicit F: Sync[F]): Client[F] = {
+  def fromHttpService[F[_]](service: HttpPartial[F])(implicit F: Sync[F]): Client[F] = {
     val isShutdown = new AtomicBoolean(false)
 
     def interruptible(body: EntityBody[F], disposed: AtomicBoolean): Stream[F, Byte] = {
@@ -288,7 +288,7 @@ object Client {
         .through(killable("client was shut down", isShutdown))
     }
 
-    def disposableService(service: HttpService[F]): Kleisli[F, Request[F], DisposableResponse[F]] =
+    def disposableService(service: HttpPartial[F]): Kleisli[F, Request[F], DisposableResponse[F]] =
       Kleisli { req: Request[F] =>
         val disposed = new AtomicBoolean(false)
         val req0 = req.withBodyStream(interruptible(req.body, disposed))

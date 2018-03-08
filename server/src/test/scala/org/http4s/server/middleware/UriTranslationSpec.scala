@@ -7,7 +7,7 @@ import org.http4s.dsl.io._
 
 class UriTranslationSpec extends Http4sSpec {
 
-  val service = HttpService[IO] {
+  val service = HttpPartial[IO] {
     case _ -> Root / "foo" =>
       Ok("foo")
 

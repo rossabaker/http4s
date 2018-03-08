@@ -4,9 +4,9 @@ package server
 import cats.effect._
 import cats.implicits._
 
-class HttpServiceSpec extends Http4sSpec {
+class HttpPartialSpec extends Http4sSpec {
 
-  val srvc1 = HttpService[IO] {
+  val srvc1 = HttpPartial[IO] {
     case req if req.pathInfo == "/match" =>
       Response[IO](Status.Ok).withBody("match")
 
@@ -17,7 +17,7 @@ class HttpServiceSpec extends Http4sSpec {
       Response[IO](Status.NotFound).withBody("notfound")
   }
 
-  val srvc2 = HttpService[IO] {
+  val srvc2 = HttpPartial[IO] {
     case req if req.pathInfo == "/srvc2" =>
       Response[IO](Status.Ok).withBody("srvc2")
 
@@ -27,7 +27,7 @@ class HttpServiceSpec extends Http4sSpec {
 
   val aggregate1 = srvc1 <+> srvc2
 
-  "HttpService" should {
+  "HttpPartial" should {
     "Return a valid Response from the first service of an aggregate" in {
       aggregate1.orNotFound(Request[IO](uri = uri("/match"))) must returnBody("match")
     }

@@ -179,7 +179,7 @@ class AuthMiddlewareSpec extends Http4sSpec {
           case POST -> Root as _ => Ok()
         }
 
-      val regularService: HttpService[IO] = HttpService[IO] {
+      val regularService: HttpPartial[IO] = HttpPartial[IO] {
         case GET -> Root => Ok()
       }
 
@@ -203,7 +203,7 @@ class AuthMiddlewareSpec extends Http4sSpec {
           case POST -> Root as _ => Ok()
         }
 
-      val regularService: HttpService[IO] = HttpService[IO] {
+      val regularService: HttpPartial[IO] = HttpPartial[IO] {
         case GET -> Root => Ok()
       }
 

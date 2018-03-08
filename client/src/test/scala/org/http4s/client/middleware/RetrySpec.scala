@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 
 class RetrySpec extends Http4sSpec with Tables {
 
-  val route = HttpService[IO] {
+  val route = HttpPartial[IO] {
     case _ -> Root / status =>
       IO.pure(Response(Status.fromInt(status.toInt).valueOr(throw _)))
   }

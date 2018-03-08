@@ -11,7 +11,7 @@ object EntityLimiter {
 
   val DefaultMaxEntitySize: Long = 2L * 1024L * 1024L // 2 MB default
 
-  def apply[F[_]](service: HttpService[F], limit: Long = DefaultMaxEntitySize): HttpService[F] =
+  def apply[F[_]](service: HttpPartial[F], limit: Long = DefaultMaxEntitySize): HttpPartial[F] =
     service.local { req: Request[F] =>
       req.withBodyStream(req.body.through(takeLimited(limit)))
     }

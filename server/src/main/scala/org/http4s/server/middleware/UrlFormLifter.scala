@@ -14,7 +14,7 @@ import cats.effect._
   */
 object UrlFormLifter {
 
-  def apply[F[_]: Effect](service: HttpService[F], strictDecode: Boolean = false): HttpService[F] =
+  def apply[F[_]: Effect](service: HttpPartial[F], strictDecode: Boolean = false): HttpPartial[F] =
     Kleisli { req =>
       def addUrlForm(form: UrlForm): OptionT[F, Response[F]] = {
         val flatForm = form.values.toVector.flatMap { case (k, vs) => vs.map(v => (k, Some(v))) }

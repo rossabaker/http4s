@@ -27,7 +27,7 @@ class CSRFSpec extends Http4sSpec {
       Instant.ofEpochMilli(clockTick.incrementAndGet())
   }
 
-  val dummyService: HttpService[IO] = HttpService[IO] {
+  val dummyService: HttpPartial[IO] = HttpPartial[IO] {
     case GET -> Root =>
       Ok()
     case POST -> Root =>

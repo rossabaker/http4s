@@ -33,7 +33,7 @@ class Http1ServerStageSpec extends Http4sSpec {
 
   def runRequest(
       req: Seq[String],
-      service: HttpService[IO],
+      service: HttpPartial[IO],
       maxReqLine: Int = 4 * 1024,
       maxHeaders: Int = 16 * 1024): Future[ByteBuffer] = {
     val head = new SeqTestHead(
@@ -55,7 +55,7 @@ class Http1ServerStageSpec extends Http4sSpec {
   "Http1ServerStage: Invalid Lengths" should {
     val req = "GET /foo HTTP/1.1\r\nheader: value\r\n\r\n"
 
-    val service = HttpService[IO] {
+    val service = HttpPartial[IO] {
       case _ => Ok("foo!")
     }
 
@@ -90,7 +90,7 @@ class Http1ServerStageSpec extends Http4sSpec {
   }
 
   "Http1ServerStage: Errors" should {
-    val exceptionService = HttpService[IO] {
+    val exceptionService = HttpPartial[IO] {
       case GET -> Root / "sync" => sys.error("Synchronous error!")
       case GET -> Root / "async" => IO.raiseError(new Exception("Asynchronous error!"))
       case GET -> Root / "sync" / "422" =>
@@ -148,7 +148,7 @@ class Http1ServerStageSpec extends Http4sSpec {
 
   "Http1ServerStage: routes" should {
     "Do not send `Transfer-Encoding: identity` response" in {
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case _ =>
           val headers = Headers(H.`Transfer-Encoding`(TransferCoding.identity))
           Response[IO](headers = headers)
@@ -170,7 +170,7 @@ class Http1ServerStageSpec extends Http4sSpec {
     }
 
     "Do not send an entity or entity-headers for a status that doesn't permit it" in {
-      val service: HttpService[IO] = HttpService[IO] {
+      val service: HttpPartial[IO] = HttpPartial[IO] {
         case _ =>
           Response[IO](status = Status.NotModified)
             .putHeaders(`Transfer-Encoding`(TransferCoding.chunked))
@@ -189,7 +189,7 @@ class Http1ServerStageSpec extends Http4sSpec {
     }
 
     "Add a date header" in {
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case req => IO.pure(Response(body = req.body))
       }
 
@@ -205,7 +205,7 @@ class Http1ServerStageSpec extends Http4sSpec {
 
     "Honor an explicitly added date header" in {
       val dateHeader = Date(HttpDate.Epoch)
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case req => IO.pure(Response(body = req.body).replaceAllHeaders(dateHeader))
       }
 
@@ -221,7 +221,7 @@ class Http1ServerStageSpec extends Http4sSpec {
     }
 
     "Handle routes that echos full request body for non-chunked" in {
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case req => IO.pure(Response(body = req.body))
       }
 
@@ -236,7 +236,7 @@ class Http1ServerStageSpec extends Http4sSpec {
     }
 
     "Handle routes that consumes the full request body for non-chunked" in {
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case req =>
           req.as[String].flatMap { s =>
             Response().withBody("Result: " + s)
@@ -261,7 +261,7 @@ class Http1ServerStageSpec extends Http4sSpec {
 
     "Maintain the connection if the body is ignored but was already read to completion by the Http1Stage" in {
 
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case _ => Response().withBody("foo")
       }
 
@@ -281,7 +281,7 @@ class Http1ServerStageSpec extends Http4sSpec {
 
     "Drop the connection if the body is ignored and was not read to completion by the Http1Stage" in {
 
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case _ => Response().withBody("foo")
       }
 
@@ -303,7 +303,7 @@ class Http1ServerStageSpec extends Http4sSpec {
 
     "Handle routes that runs the request body for non-chunked" in {
 
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case req => req.body.compile.drain *> Response().withBody("foo")
       }
 
@@ -325,7 +325,7 @@ class Http1ServerStageSpec extends Http4sSpec {
     // Think of this as drunk HTTP pipelining
     "Not die when two requests come in back to back" in {
 
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case req =>
           IO.pure(Response(body = req.body))
       }
@@ -351,7 +351,7 @@ class Http1ServerStageSpec extends Http4sSpec {
 
     "Handle using the request body as the response body" in {
 
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case req => IO.pure(Response(body = req.body))
       }
 
@@ -382,7 +382,7 @@ class Http1ServerStageSpec extends Http4sSpec {
           "0\r\n" +
           "Foo:Bar\r\n\r\n"
 
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case req if req.pathInfo == "/foo" =>
           for {
             _ <- req.body.compile.drain

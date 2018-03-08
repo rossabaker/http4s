@@ -22,7 +22,7 @@ class ExampleService[F[_]](implicit F: Effect[F]) extends Http4sDsl[F] {
   // service with the longest matching prefix.
   def service(
       implicit scheduler: Scheduler,
-      executionContext: ExecutionContext = ExecutionContext.global): HttpService[F] =
+      executionContext: ExecutionContext = ExecutionContext.global): HttpPartial[F] =
     Router[F](
       "" -> rootService,
       "/auth" -> authService,
@@ -31,8 +31,8 @@ class ExampleService[F[_]](implicit F: Effect[F]) extends Http4sDsl[F] {
 
   def rootService(
       implicit scheduler: Scheduler,
-      executionContext: ExecutionContext): HttpService[F] =
-    HttpService[F] {
+      executionContext: ExecutionContext): HttpPartial[F] =
+    HttpPartial[F] {
       case GET -> Root =>
         // Supports Play Framework template -- see src/main/twirl.
         Ok(html.index())
@@ -198,7 +198,7 @@ class ExampleService[F[_]](implicit F: Effect[F]) extends Http4sDsl[F] {
   // AuthedService to an authentication store.
   val basicAuth: AuthMiddleware[F, String] = BasicAuth(realm, authStore)
 
-  def authService: HttpService[F] =
+  def authService: HttpPartial[F] =
     basicAuth(AuthedService[String, F] {
       // AuthedServices look like Services, but the user is extracted with `as`.
       case GET -> Root / "protected" as user =>

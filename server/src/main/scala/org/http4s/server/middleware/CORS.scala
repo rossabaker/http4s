@@ -38,8 +38,8 @@ object CORS {
     * based on information in CORS config.
     * Currently, you cannot make permissions depend on request details
     */
-  def apply[F[_]](service: HttpService[F], config: CORSConfig = DefaultCORSConfig)(
-      implicit F: Applicative[F]): HttpService[F] =
+  def apply[F[_]](service: HttpPartial[F], config: CORSConfig = DefaultCORSConfig)(
+      implicit F: Applicative[F]): HttpPartial[F] =
     Kleisli { req =>
       // In the case of an options request we want to return a simple response with the correct Headers set.
       def createOptionsResponse(origin: Header, acrm: Header): Response[F] =

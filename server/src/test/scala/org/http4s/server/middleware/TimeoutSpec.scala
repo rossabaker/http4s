@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 
 class TimeoutSpec extends Http4sSpec {
 
-  val myService = HttpService[IO] {
+  val myService = HttpPartial[IO] {
     case _ -> Root / "fast" =>
       Ok("Fast")
 
@@ -47,7 +47,7 @@ class TimeoutSpec extends Http4sSpec {
 
     "clean up resources of the loser" in {
       val clean = new AtomicBoolean(false)
-      val service = HttpService[IO] {
+      val service = HttpPartial[IO] {
         case _ =>
           for {
             resp <- delay(2.seconds, NoContent())

@@ -10,20 +10,20 @@ object Router {
   import middleware.URITranslation.{translateRoot => translate}
 
   /**
-    * Defines an HttpService based on list of mappings.
+    * Defines an HttpPartial based on list of mappings.
     * @see define
     */
-  def apply[F[_]: Sync](mappings: (String, HttpService[F])*): HttpService[F] =
-    define(mappings: _*)(HttpService.empty[F])
+  def apply[F[_]: Sync](mappings: (String, HttpPartial[F])*): HttpPartial[F] =
+    define(mappings: _*)(HttpPartial.empty[F])
 
   /**
-    * Defines an HttpService based on list of mappings and
+    * Defines an HttpPartial based on list of mappings and
     * a default Service to be used when none in the list match incomming requests.
     *
     * The mappings are processed in descending order (longest first) of prefix length.
     */
-  def define[F[_]: Sync](mappings: (String, HttpService[F])*)(
-      default: HttpService[F]): HttpService[F] =
+  def define[F[_]: Sync](mappings: (String, HttpPartial[F])*)(
+      default: HttpPartial[F]): HttpPartial[F] =
     mappings.sortBy(_._1.length).foldLeft(default) {
       case (acc, (prefix, service)) =>
         if (prefix.isEmpty || prefix == "/") service <+> acc

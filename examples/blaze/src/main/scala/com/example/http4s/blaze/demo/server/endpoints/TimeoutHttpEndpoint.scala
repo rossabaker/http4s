@@ -13,7 +13,7 @@ import scala.util.Random
 
 class TimeoutHttpEndpoint[F[_]](implicit F: Async[F], S: Scheduler) extends Http4sDsl[F] {
 
-  val service: HttpService[F] = HttpService {
+  val service: HttpPartial[F] = HttpPartial {
     case GET -> Root / ApiVersion / "timeout" =>
       val randomDuration = FiniteDuration(Random.nextInt(3) * 1000L, TimeUnit.MILLISECONDS)
       S.effect.delay(Ok("delayed response"), randomDuration)

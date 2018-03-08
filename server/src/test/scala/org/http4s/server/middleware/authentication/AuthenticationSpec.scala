@@ -126,7 +126,7 @@ class AuthenticationSpec extends Http4sSpec {
     }
 
     // Send a request without authorization, receive challenge.
-    def doDigestAuth1(digest: HttpService[IO]) = {
+    def doDigestAuth1(digest: HttpPartial[IO]) = {
       // Get auth data
       val req = Request[IO](uri = Uri(path = "/"))
       val res = digest.orNotFound(req).unsafeRunSync
@@ -139,7 +139,7 @@ class AuthenticationSpec extends Http4sSpec {
 
     // Respond to a challenge with a correct response.
     // If withReplay is true, also send a replayed request.
-    def doDigestAuth2(digest: HttpService[IO], challenge: Challenge, withReplay: Boolean) = {
+    def doDigestAuth2(digest: HttpPartial[IO], challenge: Challenge, withReplay: Boolean) = {
       // Second request with credentials
       val method = "GET"
       val uri = "/"

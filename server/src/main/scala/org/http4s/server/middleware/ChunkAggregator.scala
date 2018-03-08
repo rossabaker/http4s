@@ -15,7 +15,7 @@ import org.http4s.headers._
 import scodec.bits.ByteVector
 
 object ChunkAggregator {
-  def apply[F[_]](service: HttpService[F])(implicit F: Effect[F]): HttpService[F] =
+  def apply[F[_]](service: HttpPartial[F])(implicit F: Effect[F]): HttpPartial[F] =
     service.flatMapF { response =>
       OptionT.liftF(response.body.compile.fold(ByteVector.empty.bufferBy(4096))(_ :+ _).flatMap {
         fullBody =>

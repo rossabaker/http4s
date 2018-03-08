@@ -13,7 +13,7 @@ import org.http4s.Status._
 
 class EntityLimiterSpec extends Http4sSpec {
 
-  val s = HttpService[IO] {
+  val s = HttpPartial[IO] {
     case r if r.uri.path == "/echo" => r.decode[String](Response[IO](Ok).withBody)
   }
 
@@ -36,8 +36,8 @@ class EntityLimiterSpec extends Http4sSpec {
         .handleError { case EntityTooLarge(i) => Some(i) } must returnValue(Some(3))
     }
 
-    "Chain correctly with other HttpServices" in {
-      val s2 = HttpService[IO] {
+    "Chain correctly with other HttpPartials" in {
+      val s2 = HttpPartial[IO] {
         case r if r.uri.path == "/echo2" => r.decode[String](Response[IO](Ok).withBody)
       }
 

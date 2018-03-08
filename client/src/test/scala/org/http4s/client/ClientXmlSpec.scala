@@ -12,7 +12,7 @@ class ClientXmlSpec extends Http4sSpec {
   implicit val decoder = scalaxml.xml[IO]
   val body = <html><h1>h1</h1></html>
   val xml = s"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>$body"""
-  val service = HttpService[IO] {
+  val service = HttpPartial[IO] {
     case _ =>
       Response(Ok).withBody(xml)
   }

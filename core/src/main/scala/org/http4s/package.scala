@@ -19,6 +19,12 @@ package object http4s { // scalastyle:ignore
 
   val DefaultCharset = Charset.`UTF-8`
 
+  type Http[F[_]] = Kleisli[F, Request[F], Response[F]]
+
+  type HttpL[F[_], G[_]] = Kleisli[F, Request[G], Response[G]]
+
+  type HttpPartial[F[_]] = HttpL[OptionT[F, ?], F]
+
   /**
     * A Service wraps a function of request type `A` to an effect that runs
     * to response type `B`.  By wrapping the [[Service]], we can compose them
@@ -34,7 +40,10 @@ package object http4s { // scalastyle:ignore
     * An HttpService can be run on any supported http4s
     * server backend, such as Blaze, Jetty, or Tomcat.
     */
+  @deprecated("Renamed to HttpPartial", "0.19")
   type HttpService[F[_]] = Kleisli[OptionT[F, ?], Request[F], Response[F]]
+
+
 
   /**
     * We need to change the order of type parameters to make partial unification

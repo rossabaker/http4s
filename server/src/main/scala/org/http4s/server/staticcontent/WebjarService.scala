@@ -51,7 +51,7 @@ object WebjarService {
     * @param config The configuration for this service
     * @return The HttpService
     */
-  def apply[F[_]: Effect](config: Config[F]): HttpService[F] = Kleisli {
+  def apply[F[_]: Effect](config: Config[F]): HttpPartial[F] = Kleisli {
     // Intercepts the routes that match webjar asset names
     case request if request.method == Method.GET =>
       OptionT

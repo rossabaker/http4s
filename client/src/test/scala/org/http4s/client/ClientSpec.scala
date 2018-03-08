@@ -7,7 +7,7 @@ import org.http4s.Method._
 import org.http4s.Status.Ok
 
 class ClientSpec extends Http4sSpec {
-  val service = HttpService[IO] {
+  val service = HttpPartial[IO] {
     case r => Response[IO](Ok).withBody(r.body)
   }
   val client: Client[IO] = Client.fromHttpService(service)

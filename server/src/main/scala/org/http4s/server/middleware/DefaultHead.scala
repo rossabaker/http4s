@@ -14,7 +14,7 @@ import cats.implicits._
   * requiring more optimization should implement their own HEAD handler.
   */
 object DefaultHead {
-  def apply[F[_]: Monad](service: HttpService[F]): HttpService[F] =
+  def apply[F[_]: Monad](service: HttpPartial[F]): HttpPartial[F] =
     Kleisli { req =>
       req.method match {
         case Method.HEAD =>
@@ -24,7 +24,7 @@ object DefaultHead {
       }
     }
 
-  private def headAsTruncatedGet[F[_]: Functor](service: HttpService[F]): HttpService[F] =
+  private def headAsTruncatedGet[F[_]: Functor](service: HttpPartial[F]): HttpPartial[F] =
     Kleisli { req =>
       val getReq = req.withMethod(Method.GET)
       service(getReq).map(response => response.copy(body = response.body.drain))
