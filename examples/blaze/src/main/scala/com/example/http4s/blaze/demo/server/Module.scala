@@ -1,5 +1,6 @@
 package com.example.http4s.blaze.demo.server
 
+import cats.data.OptionT
 import cats.effect.Effect
 import cats.syntax.semigroupk._ // For <+>
 import com.example.http4s.blaze.demo.server.endpoints._
@@ -26,13 +27,13 @@ class Module[F[_]](client: Client[F])(implicit F: Effect[F], S: Scheduler) {
   def middleware: HttpMiddleware[F] = { (service: HttpPartial[F]) =>
     GZip(service)(F)
   }.compose { service =>
-    AutoSlash(service)(F)
+    AutoSlash(service)
   }
 
   val fileHttpEndpoint: HttpPartial[F] =
     new FileHttpEndpoint[F](fileService).service
 
-  val nonStreamFileHttpEndpoint = ChunkAggregator(fileHttpEndpoint)
+  val nonStreamFileHttpEndpoint = ChunkAggregator(fileHttpEndpoint)(OptionT.liftK)
 
   private val hexNameHttpEndpoint: HttpPartial[F] =
     new HexNameHttpEndpoint[F].service

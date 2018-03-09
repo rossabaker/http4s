@@ -2,12 +2,10 @@ package org.http4s
 package server
 package middleware
 
-import cats.Functor
-import cats.data.{NonEmptyList, OptionT}
-import cats.effect.Effect
-import cats.syntax.eq._
-import cats.syntax.functor._
-import cats.syntax.flatMap._
+import cats.{~>, Functor}
+import cats.data.{Kleisli, NonEmptyList}
+import cats.effect.Sync
+import cats.implicits._
 import fs2._
 import fs2.interop.scodec.ByteVectorChunk
 import org.http4s.EntityEncoder.chunkEncoder
@@ -15,16 +13,16 @@ import org.http4s.headers._
 import scodec.bits.ByteVector
 
 object ChunkAggregator {
-  def apply[F[_]](service: HttpPartial[F])(implicit F: Effect[F]): HttpPartial[F] =
+  def apply[F[_], G[_], A](service: Kleisli[F, A, Response[G]])(f: G ~> F)(implicit F: Sync[F], G: Sync[G]): Kleisli[F, A, Response[G]] =
     service.flatMapF { response =>
-      OptionT.liftF(response.body.compile.fold(ByteVector.empty.bufferBy(4096))(_ :+ _).flatMap {
+      f(response.body.compile.fold(ByteVector.empty.bufferBy(4096))(_ :+ _).flatMap {
         fullBody =>
           if (fullBody.nonEmpty)
             response
               .withBody(ByteVectorChunk(fullBody): Chunk[Byte])
               .map(removeChunkedTransferEncoding)
           else
-            F.pure(response)
+            G.pure(response)
       })
     }
 

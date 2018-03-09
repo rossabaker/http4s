@@ -4,6 +4,8 @@ import cats.Applicative
 import cats.data.Kleisli
 
 object Http {
+  def apply[F[_]](f: Request[F] => F[Response[F]]): Http[F] = Kleisli(f)
+
   def fromPartial[F[_]](pf: PartialFunction[Request[F], F[Response[F]]], notFound: Response[F] = Response.notFound[F])(implicit F: Applicative[F]): Http[F] =
     Kleisli(pf.lift.andThen(_.getOrElse(F.pure(notFound))))
 }
