@@ -9,7 +9,7 @@ import org.http4s.blaze.util.{Cancellable, TickWheelExecutor}
 import scala.annotation.tailrec
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration.Duration
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 final private[blaze] class ClientTimeoutStage(
     responseHeaderTimeout: Duration,
@@ -127,8 +127,7 @@ final private[blaze] class ClientTimeoutStage(
 
     f.onComplete {
       case s @ Success(_) =>
-        resetTimeout()
-        p.tryComplete(s)
+        p.tryComplete(Try(resetTimeout()).flatMap(_ => s))
 
       case eof @ Failure(EOF) =>
         timeoutState.get() match {

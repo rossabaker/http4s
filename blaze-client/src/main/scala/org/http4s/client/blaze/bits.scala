@@ -17,7 +17,8 @@ private[blaze] object bits {
   val DefaultMaxTotalConnections = 10
   val DefaultMaxWaitQueueLimit = 256
 
-  val ClientTickWheel = new TickWheelExecutor()
+  @deprecated("Now created in the client so it can be shut down", "0.18.10")
+  lazy val ClientTickWheel = new TickWheelExecutor()
 
   /** Caution: trusts all certificates and disables endpoint identification */
   lazy val TrustingSslContext: SSLContext = {

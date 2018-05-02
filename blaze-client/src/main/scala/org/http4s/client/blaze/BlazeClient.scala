@@ -8,6 +8,7 @@ import cats.data.Kleisli
 import cats.effect._
 import cats.implicits._
 import org.http4s.blaze.pipeline.Command
+import org.http4s.blaze.util.TickWheelExecutor
 import org.log4s.getLogger
 import scala.concurrent.duration._
 
@@ -24,7 +25,8 @@ object BlazeClient {
   def apply[F[_], A <: BlazeConnection[F]](
       manager: ConnectionManager[F, A],
       config: BlazeClientConfig,
-      onShutdown: F[Unit])(implicit F: Sync[F]): Client[F] =
+      onShutdown: F[Unit])(implicit F: Sync[F]): Client[F] = {
+    val clientTickWheel = new TickWheelExecutor()
     Client(
       Kleisli { req =>
         F.suspend {
@@ -46,7 +48,7 @@ object BlazeClient {
               else config.responseHeaderTimeout - elapsed,
               config.idleTimeout,
               if (elapsed > config.requestTimeout) 0.milli else config.requestTimeout - elapsed,
-              bits.ClientTickWheel
+              clientTickWheel
             )
             next.connection.spliceBefore(ts)
             ts.initialize()
@@ -78,6 +80,14 @@ object BlazeClient {
           manager.borrow(key).flatMap(loop)
         }
       },
-      onShutdown
+      onShutdown.attempt.flatMap {
+        case Left(t) =>
+          F.delay(clientTickWheel.shutdown()).handleErrorWith {
+            t2 => F.raiseError { t.addSuppressed(t2); t }
+          }
+        case Right(()) =>
+          F.delay(clientTickWheel.shutdown())
+      }
     )
+  }
 }
