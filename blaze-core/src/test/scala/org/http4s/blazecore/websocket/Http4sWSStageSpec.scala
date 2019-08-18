@@ -2,16 +2,17 @@ package org.http4s.blazecore
 package websocket
 
 import fs2.Stream
-import fs2.concurrent.{Queue, SignallingRef}
-import cats.effect.IO
+import fs2.concurrent.Queue
+import cats.effect.{IO, Timer}
+import cats.effect.concurrent.{Deferred, TryableDeferred}
 import cats.implicits._
-import java.util.concurrent.atomic.AtomicBoolean
 import org.http4s.Http4sSpec
 import org.http4s.blaze.pipeline.LeafBuilder
 import org.http4s.websocket.{WebSocket, WebSocketFrame}
 import org.http4s.websocket.WebSocketFrame._
 import org.http4s.blaze.pipeline.Command
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 class Http4sWSStageSpec extends Http4sSpec {
   override implicit def testExecutionContext: ExecutionContext =
@@ -20,7 +21,7 @@ class Http4sWSStageSpec extends Http4sSpec {
   class TestWebsocketStage(
       outQ: Queue[IO, WebSocketFrame],
       head: WSTestHead,
-      closeHook: AtomicBoolean) {
+      val closeHookCalled: TryableDeferred[IO, Unit]) {
 
     def sendWSOutbound(w: WebSocketFrame*): IO[Unit] =
       Stream
@@ -40,19 +41,18 @@ class Http4sWSStageSpec extends Http4sSpec {
       head.pollBatch(batchSize, timeoutSeconds)
 
     def wasCloseHookCalled(): IO[Boolean] =
-      IO(closeHook.get())
+      closeHookCalled.tryGet.map(_.isDefined)
   }
 
   object TestWebsocketStage {
     def apply(): IO[TestWebsocketStage] =
       for {
         outQ <- Queue.unbounded[IO, WebSocketFrame]
-        closeHook = new AtomicBoolean(false)
-        ws = WebSocket[IO](outQ.dequeue, _.drain, IO(closeHook.set(true)))
-        deadSignal <- SignallingRef[IO, Boolean](false)
-        head = LeafBuilder(new Http4sWSStage[IO](ws, closeHook, deadSignal)).base(WSTestHead())
+        closeHookCalled <- Deferred.tryable[IO, Unit]
+        ws = WebSocket[IO](outQ.dequeue, _.drain, closeHookCalled.complete(()))
+        head = LeafBuilder(new Http4sWSStage[IO](ws)).base(WSTestHead())
         _ <- IO(head.sendInboundCommand(Command.Connected))
-      } yield new TestWebsocketStage(outQ, head, closeHook)
+      } yield new TestWebsocketStage(outQ, head, closeHookCalled)
   }
 
   "Http4sWSStage" should {
@@ -70,6 +70,15 @@ class Http4sWSStageSpec extends Http4sSpec {
       _ <- socket.pollOutbound().map(_ must_=== Some(Close()))
       _ <- socket.pollOutbound().map(_ must_=== None)
       _ <- socket.sendInbound(Close())
+    } yield ok).unsafeRunSync()
+
+    "await close response" in (for {
+      socket <- TestWebsocketStage()
+      _ <- socket.sendWSOutbound(Close())
+      _ <- Timer[IO].sleep(1.second)
+      _ <- socket.closeHookCalled.tryGet.map(_ must_=== None)
+      _ <- socket.sendInbound(Close())
+      _ <- socket.closeHookCalled.get.timeout(4.seconds)
     } yield ok).unsafeRunSync()
 
     "send a close frame back and call the on close handler upon receiving a close frame" in (for {
