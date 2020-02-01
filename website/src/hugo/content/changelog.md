@@ -8,6 +8,25 @@ Maintenance branches are merged before each new release. This change log is
 ordered chronologically, so each release contains all changes described below
 it.
 
+# v0.21.0-RC3
+
+## Breaking changes
+
+### Binary
+
+* [#3126](https://github.com/http4s/http4s/pull/3126): Remove unnecessary `Applicative` constraints from http4s-circe
+* [#3134](https://github.com/http4s/http4s/pull/3132): In `BlazeServerBuilder`:
+  * Deprecate `withSSLContext(SSLContext, SSLClientAuthMode)` in favor of `withSslContext(SSLContext)` and `swithSSLContextAndParameters(SSLContext, SSLParameters)` for more options.
+  * Add `withoutSsl`
+* [#3132](https://github.com/http4s/http4s/pull/3132): In `BlazeServerBuilder`:
+  * Deprecate `withSSLContext(SSLContext, SSLClientAuthMode)` in favor of `withSslContext(SSLContext)` and `swithSSLContextAndParameters(SSLContext, SSLParameters)` for more options.
+  * Add `withoutSsl`
+
+
+## Dependency updates
+
+* fs2-2.2.2
+
 # v0.21.0-RC2 (2020-01-27)
 
 ## Breaking changes
