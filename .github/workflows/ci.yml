@@ -2,7 +2,7 @@ name: CI
 on: [push, pull_request]
 env:
   HUGO_VERSION: 0.26
-  SCALA_VERSION: 2.12.10
+  SCALA_VERSION: ${{ matrix.scala }}
 jobs:
   validate:
     name: Scala ${{ matrix.scala }}, Java ${{ matrix.java }}
@@ -10,21 +10,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [8, 11]
-        scala: [2.12.10, 2.13.1]
-    env:
-      SCALA_VERSION: ${{ matrix.scala }}
+        java:
+          - 8
+          - 11
+        scala:
+          - 2.12.10
+          - 2.13.1
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-java@v1
+      - &checkout uses: actions/checkout@v2
+      - &setup-java
+        uses: actions/setup-java@v1
         with:
           java-version: ${{ matrix.java }}
-      - name: Cache Coursier
+      - &cache-coursier
+        name: Cache Coursier
         uses: actions/cache@v1
         with:
           path: ~/.cache/coursier
           key: sbt-coursier-cache
-      - name: Cache SBT
+      - &cache-sbt
+        name: Cache SBT
         uses: actions/cache@v1
         with:
           path: ~/.sbt
@@ -44,70 +49,49 @@ jobs:
         run: sbt ++$SCALA_VERSION doc
   scalafix:
     name: Scalafix
-    runs-on: ubuntu-latest    
+    runs-on: ubuntu-latest
+    strategy: &no-cross
+      fail-fast: false
+      matrix:
+        java:
+          - 8
+        scala:
+          - 2.12.10
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-java@v1
-        with:
-          java-version: 8
-      - name: Cache Coursier
-        uses: actions/cache@v1
-        with:
-          path: ~/.cache/coursier
-          key: sbt-coursier-cache
-      - name: Cache SBT
-        uses: actions/cache@v1
-        with:
-          path: ~/.sbt
-          key: sbt-${{ hashFiles('**/build.sbt') }}
+      - *checkout
+      - *setup-java
+      - *cache-coursier
+      - *cache-sbt
       - name: Scalafix
         working-directory: ./scalafix
         run: sbt ++$SCALA_VERSION test
   project-site:
     name: Project Site
-    runs-on: ubuntu-latest    
+    runs-on: ubuntu-latest
+    <<: *no-cross
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-java@v1
-        with:
-          java-version: 8
-      - name: Cache Coursier
-        uses: actions/cache@v1
-        with:
-          path: ~/.cache/coursier
-          key: sbt-coursier-cache
-      - name: Cache SBT
-        uses: actions/cache@v1
-        with:
-          path: ~/.sbt
-          key: sbt-${{ hashFiles('**/build.sbt') }}
-      - name: Add ~/bin to PATH
+      - *checkout
+      - *setup-java
+      - *cache-coursier
+      - *cache-sbt
+      - &add-home-bin
+        name: Add ~/bin to PATH
         run: echo "::add-path::$HOME/bin"
-      - name: Install Hugo
+      - &install-hugo
+        name: Install Hugo
         run: scripts/install-hugo
       - name: Build project site
         run: sbt ++$SCALA_VERSION website/makeSite
   docs:
     name: Doc Site
     runs-on: ubuntu-latest
+    <<: *no-cross
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-java@v1
-        with:
-          java-version: 8
-      - name: Cache Coursier
-        uses: actions/cache@v1
-        with:
-          path: ~/.cache/coursier
-          key: sbt-coursier-cache
-      - name: Cache SBT
-        uses: actions/cache@v1
-        with:
-          path: ~/.sbt
-          key: sbt-${{ hashFiles('**/build.sbt') }}
-      - name: Add ~/bin to PATH
-        run: echo "::add-path::$HOME/bin"
-      - name: Install Hugo
-        run: scripts/install-hugo
+      - *checkout
+      - *setup-java
+      - *cache-coursier
+      - *cache-sbt
+      - *add-home-bin
+      - *install-hugo
       - name: Build project site
         run: sbt ++$SCALA_VERSION docs/makeSite
