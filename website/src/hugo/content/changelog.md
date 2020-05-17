@@ -44,10 +44,6 @@ It is not binary compatible with prior releases.
 
 * argonaut-6.3.0
 * async-http-client-2.12.1
-* json4s-3.6.8
-* metrics-core-4.1.7
-* scalatags-0.9.1
-* specs2-4.9.4
 
 # v0.21.4 (2020-04-28)
 
