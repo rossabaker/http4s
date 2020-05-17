@@ -31,9 +31,23 @@ It is not binary compatible with prior releases.
 
 * [#3320](https://github.com/http4s/http4s/pull/3320): Reimplement `Media#as` with `F.rethrow`
 
+## Deprecations
+
+* [#3359](https://github.com/http4s/http4s/pull/3359): Deprecate the `org.http4s.util.execution` package.
+
+## Internal refactoring
+
+* [#3386](https://github.com/http4s/http4s/pull/3386): Drop internal argonaut parser in favor of jawn's
+* [#3266](https://github.com/http4s/http4s/pull/3266): Replace `fs2.compress` with `fs2.compression`
+
 ## Dependency updates
 
-* async-http-client-2.11.0
+* argonaut-6.3.0
+* async-http-client-2.12.1
+* json4s-3.6.8
+* metrics-core-4.1.7
+* scalatags-0.9.1
+* specs2-4.9.4
 
 # v0.21.4 (2020-04-28)
 
