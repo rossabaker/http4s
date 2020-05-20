@@ -385,6 +385,9 @@ lazy val bench = http4sProject("bench")
   .settings(
     description := "Benchmarks for http4s",
     libraryDependencies += circeParser,
+    libraryDependencies += "org.tpolecat" %% "atto-core"    % "0.7.0",
+    libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.2.2",
+
     unusedCompileDependenciesFilter -= moduleFilter(organization = "org.openjdk.jmh"),
     unusedCompileDependenciesFilter -= moduleFilter(organization = "pl.project13.scala", name = "sbt-jmh-extras"),
   )
