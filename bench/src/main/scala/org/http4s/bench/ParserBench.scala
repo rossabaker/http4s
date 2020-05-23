@@ -6,11 +6,11 @@
 
 package org.http4s.bench
 
-import atto._, Atto._
 import cats.implicits._
 import java.lang.String
 import org.openjdk.jmh.annotations.Benchmark
 import org.http4s.internal.parboiled2.{Parser => PbParser, _}
+import scala.annotation.tailrec
 
 // Json AST
 sealed trait JValue
@@ -33,6 +33,7 @@ object JValue {
 }
 
 object attobench extends Whitespace {
+  import atto._, Atto._
   import JValue._
 
   // Bracketed, comma-separated sequence, internal whitespace allowed
@@ -59,6 +60,7 @@ object attobench extends Whitespace {
 // Some extre combinators and syntax for coping with whitespace. Something like this might be
 // useful in core but it needs some thought.
 trait Whitespace {
+  import atto._, Atto._
 
   // Syntax for turning a parser into one that consumes trailing whitespace
   implicit class TokenOps[A](self: Parser[A]) {
@@ -528,10 +530,195 @@ object JsonParse {
     )
 }
 
+object Scodec {
+  import scodec._
+  import scodec.codecs._
+  import scodec.bits._
+  import JValue._
+
+  def ignoreBytes(f: Byte => Boolean): Codec[Unit] = {
+    val empty = Attempt.successful(BitVector.empty)
+    new Codec[Unit] {
+      def decode(bits: BitVector): Attempt[DecodeResult[Unit]] = {
+        val bytes = bits.bytes.dropWhile(f)
+        Attempt.successful(DecodeResult((), bytes.bits))
+      }
+
+      def encode(value: Unit): Attempt[BitVector] = empty
+
+      val sizeBound: SizeBound = SizeBound.unknown
+    }
+  }
+
+  /** codec that ignores any Whitespace when decoding **/
+  val ignoreWS: Codec[Unit] = ignoreBytes(_.toChar.isWhitespace)
+
+  def constantString1(s: String): Codec[Unit] =
+    constant(BitVector.view(s.getBytes))
+
+  val `{` = constantString1("{")
+  val `}` = constantString1("}")
+  val `:` = constantString1(":")
+  val `]` = constantString1("]")
+  val `[` = constantString1("[")
+  val quote = constantString1(""""""")
+
+  def commaDelimited[A](valueCodec: Codec[A]): Codec[List[A]] =
+    delimitedBy(comma, comma_SP, valueCodec)
+
+  def delimitedBy[A](by: ByteVector, encodeBy: ByteVector, valueCodec: Codec[A]): Codec[List[A]] = {
+    listMultiplexed(
+      _ ++ encodeBy.bits ++ _
+      , bits => splitByQuoted(by, bits)
+      , valueCodec)
+  }
+
+  val comma = ByteVector(',')
+  val SP = ByteVector(' ')
+  val comma_SP = ByteVector(',',' ')
+
+  def splitByQuoted(delimiter: ByteVector, content:BitVector):(BitVector, BitVector) = {
+    val bs = content.bytes
+    @tailrec
+    def go(rem: ByteVector, inQuote: Boolean):(BitVector, BitVector) = {
+      if (rem.isEmpty) (content, BitVector.empty)
+      else if (rem.head == '"') {
+        if (inQuote) go(rem.tail, inQuote = false)
+        else go(rem.tail, inQuote = true)
+      } else {
+        if (inQuote) go(rem.tail, inQuote = true)
+        else {
+          if (! rem.startsWith(delimiter)) go(rem.tail, inQuote = false)
+          else {
+            val t = rem.drop(delimiter.length)
+            val h = bs.take(bs.length - t.length - delimiter.length)
+            h.bits -> t.bits
+          }
+        }
+      }
+    }
+    go (bs, inQuote = false)
+
+  }
+
+  val bitVector = BitVector(JsonTest.text.getBytes("UTF-8"))
+
+  val json: Codec[JValue] = element
+
+  lazy val element: Codec[JValue] = choice(
+    "object" | `object`,
+    "array" | array,
+    "string" | string,
+    "number" | number,
+    "true" | `true`,
+    "false" | `false`,
+    "null" | `null`
+  )
+
+  lazy val `object`: Codec[JValue] = choice(
+    (`{` ~> lazily(members) <~ `}`).xmap(jObject(_), _ match {
+      case JObject(values) => values
+      case _ => Nil
+    })
+  )
+  lazy val array: Codec[JValue] = choice(
+    (`[` ~> lazily(elements)).xmap(jArray(_), _ match {
+      case JArray(values) => values
+      case _ => Nil
+    })
+  )
+  lazy val string: Codec[JValue] = {
+    (characters).xmap(jString, _.toString)
+  }
+  lazy val number: Codec[JValue] = doubleAsString.xmap(jNumber, _ match {
+    case JNumber(value) => value
+    case _ => Double.NaN
+  })
+  lazy val `true`: Codec[JValue] = constantString1("true").xmap(_ => jBoolean(true), _ => ())
+  lazy val `false`: Codec[JValue] = constantString1("false").xmap(_ => jBoolean(false), _ => ())
+  lazy val `null`: Codec[JValue] = constantString1("null").xmap(_ => jNull, _ => ())
+
+  lazy val members: Codec[List[(String, JValue)]] =
+    commaDelimited(member)
+
+  lazy val member: Codec[(String, JValue)] =
+    ((ignoreWS ~> string <~ ignoreWS <~ `:`) ~ element).xmap(
+      { case (k, v) => k.toString -> v },
+      { case (k, v) => JString(k) -> v }
+    )
+  import java.nio.charset.Charset
+  import java.nio.charset.StandardCharsets
+
+  lazy val characters: Codec[String] =
+    quotedString(StandardCharsets.UTF_8)
+
+  lazy val elements: Codec[List[JValue]] = commaDelimited(element)
+  lazy val arrElements: Codec[List[JValue]] = commaDelimited(`true`)
+
+  def quotedString(charset: Charset, quote: Char = '"', escape: Char = '\\'): Codec[String] = {
+    val quoteByte = quote.toByte
+    val escapeByte = escape.toByte
+    val quoteString = quoteByte.toString
+    val quoteStringEscaped = quoteString + "\""
+    val quoteBits = BitVector.view(Array(quoteByte))
+
+    new Codec[String] {
+      def decode(bits: BitVector) = {
+        if (!bits.startsWith(quoteBits)) Attempt.failure(Err(s"Quoted string does not start with $quote"))
+        else {
+          @tailrec
+          def go(rem: ByteVector, acc: ByteVector): Attempt[(BitVector, BitVector)] = {
+            val clean = rem.takeWhile { b => b != quoteByte && b!= escapeByte }
+            val next = rem.drop(clean.size)
+            next.headOption match {
+              case Some(h) =>
+                if (h != escapeByte) Attempt.successful(((acc ++ clean).bits, next.tail.bits))
+                else go(next.drop(2), acc ++ clean ++ next.drop(1).take(1))
+
+              case None => Attempt.failure(Err(s"Unterminated string constant, required termination with $quote"))
+            }
+          }
+
+          go(bits.bytes.drop(1), ByteVector.empty).flatMap { case (stringBits, rem) =>
+            attempt { charset.decode(stringBits.bytes.toByteBuffer) } map { s => DecodeResult(s.toString, rem) }
+          }
+        }
+      }
+
+      def encode(value: String) = {
+        Attempt.successful {
+          quoteBits ++
+          BitVector.view(value.replace(quoteString, quoteStringEscaped).getBytes(charset)) ++
+          quoteBits
+        }
+      }
+
+      val sizeBound = SizeBound.unknown
+    }
+  }
+
+  lazy val doubleAsString: Codec[Double] =
+    fromAsciiString[Double](_.toDouble, _.toString).withToString("doubleAsString")
+
+  def fromAsciiString[A](f: String => A, g: A => String):Codec[A] = {
+    codecs.string(StandardCharsets.US_ASCII).exmap(
+      s => try { Attempt.successful(f(s.trim.toLowerCase)) } catch { case t: Throwable => Attempt.failure(Err(s"Invalid format : $s : ${t.getMessage}")) }
+      , b => Attempt.successful(g(b))
+    )
+  }
+
+  def attempt[A](a: => A):Attempt[A] = {
+    try { Attempt.successful(a) }
+    catch { case t: Throwable => Attempt.failure(Err(s"${t.getClass} : ${t.getMessage}"))}
+  }
+}
+
 class ParserBench {
   @Benchmark
-  def testAtto: atto.ParseResult[JValue] =
+  def testAtto: atto.ParseResult[JValue] = {
+    import atto._, Atto._
     attobench.jexpr.parseOnly(JsonTest.text)
+  }
 
   @Benchmark
   def testParboiled: scala.util.Try[JValue] =
@@ -540,4 +727,10 @@ class ParserBench {
   @Benchmark
   def testFastparse: fastparse.Parsed[JValue] =
     fastparse.parse(JsonTest.text, JsonParse.jsonExpr(_))
+
+  @Benchmark
+  def testScodec: scodec.Attempt[scodec.DecodeResult[JValue]] = {
+    import Scodec._
+    json.decode(bitVector)
+  }
 }
