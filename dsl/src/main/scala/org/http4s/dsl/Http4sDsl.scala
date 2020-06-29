@@ -9,17 +9,18 @@ package org.http4s.dsl
 import cats.arrow.FunctionK
 import org.http4s.Method
 import org.http4s.dsl.impl._
+import org.http4s.Uri
 
 trait Http4sDsl2[F[_], G[_]] extends Methods with Statuses with Responses[F, G] with Auth {
   import Http4sDsl._
 
-  type Path = impl.Path
-  type Root = impl.Root.type
-  type / = impl./
+  // type Path = Uri.Path
+  // type Root = Uri.Path..type
+  // type / = impl./
   type MethodConcat = impl.MethodConcat
 
-  val Path: impl.Path.type = impl.Path
-  val Root: impl.Root.type = impl.Root
+  val Path: Uri.Path.type = Uri.Path
+  val Root: Uri.Path.Root.type = Uri.Path.Root
   val / : impl./.type = impl./
   val :? : impl.:?.type = impl.:?
   val ~ : impl.~.type = impl.~

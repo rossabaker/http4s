@@ -13,69 +13,70 @@ import cats.data._
 import cats.data.Validated._
 import cats.implicits._
 import org.http4s._
+import org.http4s.Uri.Path
 import scala.util.Try
 
-/** Base class for path extractors. */
-trait Path {
-  def /(child: String) = new /(this, child)
-  def toList: List[String]
-  def parent: Path
-  def lastOption: Option[String]
-  def startsWith(other: Path): Boolean
-}
+// /** Base class for path extractors. */
+// trait Path {
+//   def /(child: String) = new /(this, child)
+//   def toList: List[String]
+//   def parent: Path
+//   def lastOption: Option[String]
+//   def startsWith(other: Path): Boolean
+// }
 
-object Path {
+// object Path {
 
-  /** Constructs a path from a single string by splitting on the `'/'`
-    * character.
-    *
-    * Leading slashes do not create an empty path segment.  This is to
-    * reflect that there is no distinction between a request to
-    * `http://www.example.com` from `http://www.example.com/`.
-    *
-    * Trailing slashes result in a path with an empty final segment,
-    * unless the path is `"/"`, which is `Root`.
-    *
-    * Segments are URL decoded.
-    *
-    * {{{
-    * scala> Path("").toList
-    * res0: List[String] = List()
-    * scala> Path("/").toList
-    * res1: List[String] = List()
-    * scala> Path("a").toList
-    * res2: List[String] = List(a)
-    * scala> Path("/a").toList
-    * res3: List[String] = List(a)
-    * scala> Path("/a/").toList
-    * res4: List[String] = List(a, "")
-    * scala> Path("//a").toList
-    * res5: List[String] = List("", a)
-    * scala> Path("/%2F").toList
-    * res0: List[String] = List(/)
-    * }}}
-    */
-  def apply(str: String): Path =
-    apply(Uri.Path.fromString(str))
+//   /** Constructs a path from a single string by splitting on the `'/'`
+//     * character.
+//     *
+//     * Leading slashes do not create an empty path segment.  This is to
+//     * reflect that there is no distinction between a request to
+//     * `http://www.example.com` from `http://www.example.com/`.
+//     *
+//     * Trailing slashes result in a path with an empty final segment,
+//     * unless the path is `"/"`, which is `Root`.
+//     *
+//     * Segments are URL decoded.
+//     *
+//     * {{{
+//     * scala> Path("").toList
+//     * res0: List[String] = List()
+//     * scala> Path("/").toList
+//     * res1: List[String] = List()
+//     * scala> Path("a").toList
+//     * res2: List[String] = List(a)
+//     * scala> Path("/a").toList
+//     * res3: List[String] = List(a)
+//     * scala> Path("/a/").toList
+//     * res4: List[String] = List(a, "")
+//     * scala> Path("//a").toList
+//     * res5: List[String] = List("", a)
+//     * scala> Path("/%2F").toList
+//     * res0: List[String] = List(/)
+//     * }}}
+//     */
+//   def apply(str: String): Path =
+//     apply(Uri.Path.fromString(str))
 
-  def apply(path: Uri.Path): Path =
-    if (path.isEmpty) Root
-    else
-      (if (path.endsWithSlash) path.segments :+ Uri.Path.Segment("") else path.segments)
-        .foldLeft(Root: Path)((path, seg) => path / seg.decoded())
+//   def apply(path: Uri.Path): Path =
+//     if (path.isEmpty) Root
+//     else
+//       (if (path.endsWithSlash) path.segments :+ Uri.Path.Segment("") else path.segments)
+//         .foldLeft(Root: Path)((path, seg) => path / seg.decoded())
 
-  def apply(first: String, rest: String*): Path =
-    rest.foldLeft(Root / first)(_ / _)
+//   def apply(first: String, rest: String*): Path =
+//     rest.foldLeft(Root / first)(_ / _)
 
-  def apply(list: List[String]): Path =
-    list.foldLeft(Root: Path)(_ / _)
+//   def apply(list: List[String]): Path =
+//     list.foldLeft(Root: Path)(_ / _)
 
-  def unapplySeq(path: Path): Some[List[String]] =
-    Some(path.toList)
+//   def unapplySeq(path: Path): Some[List[String]] =
+//     Some(path.toList)
 
-  def unapplySeq[F[_]](request: Request[F]): Some[List[String]] =
-    Some(Path(request.pathInfo).toList)
-}
+//   def unapplySeq[F[_]](request: Request[F]): Some[List[String]] =
+//     Some(Path(request.pathInfo).toList)
+// }
 
 object :? {
   def unapply[F[_]](req: Request[F]): Some[(Request[F], Map[String, collection.Seq[String]])] =
@@ -92,10 +93,10 @@ object ~ {
     */
   def unapply(path: Path): Option[(Path, String)] =
     path match {
-      case Root => None
+      case Path.Root => None
       case parent / last =>
         unapply(last).map {
-          case (base, ext) => (parent / base, ext)
+          case (base, ext) => (parent / Uri.Path.Segment(base), ext)
         }
     }
 
@@ -113,20 +114,20 @@ object ~ {
     }
 }
 
-final case class /(parent: Path, child: String) extends Path {
-  lazy val toList: List[String] = parent.toList ++ List(child)
+// final case class /(parent: Path, child: String) extends Path {
+//   lazy val toList: List[String] = parent.toList ++ List(child)
 
-  def lastOption: Some[String] = Some(child)
+//   def lastOption: Some[String] = Some(child)
 
-  lazy val asString: String = s"$parent/${Uri.pathEncode(child)}"
+//   lazy val asString: String = s"$parent/${Uri.pathEncode(child)}"
 
-  override def toString: String = asString
+//   override def toString: String = asString
 
-  def startsWith(other: Path): Boolean = {
-    val components = other.toList
-    toList.take(components.length) === components
-  }
-}
+//   def startsWith(other: Path): Boolean = {
+//     val components = other.toList
+//     toList.take(components.length) === components
+//   }
+// }
 
 object -> {
 
@@ -138,7 +139,7 @@ object -> {
     * }}}
     */
   def unapply[F[_]](req: Request[F]): Some[(Method, Path)] =
-    Some((req.method, Path(req.pathInfo)))
+    Some((req.method, req.pathInfo))
 }
 
 class MethodConcat(val methods: Set[Method]) {
@@ -156,25 +157,25 @@ class MethodConcat(val methods: Set[Method]) {
     Some(method).filter(methods)
 }
 
-/**
-  * Root extractor:
-  * {{{
-  *   Path("/") match {
-  *     case Root => ...
-  *   }
-  * }}}
-  */
-case object Root extends Path {
-  def toList: List[String] = Nil
+// /**
+//   * Root extractor:
+//   * {{{
+//   *   Path("/") match {
+//   *     case Root => ...
+//   *   }
+//   * }}}
+//   */
+// case object Root extends Path {
+//   def toList: List[String] = Nil
 
-  def parent: Path = this
+//   def parent: Path = this
 
-  def lastOption: None.type = None
+//   def lastOption: None.type = None
 
-  override def toString = ""
+//   override def toString = ""
 
-  def startsWith(other: Path): Boolean = other == Root
-}
+//   def startsWith(other: Path): Boolean = other == Root
+// }
 
 /**
   * Path separator extractor:
@@ -185,9 +186,17 @@ case object Root extends Path {
   */
 object /: {
   def unapply(path: Path): Option[(String, Path)] =
-    path.toList match {
-      case head :: tail => Some(head -> Path(tail))
-      case Nil => None
+    path.segments match {
+      case head +: tail => Some(head.toString -> Path(tail))
+      case _ => None
+    }
+}
+
+object / {
+  def unapply(path: Path): Option[(Path, String)] =
+    path.segments match {
+      case head :+ tail => Some(Path(head) -> tail.toString)
+      case _ => None
     }
 }
 
