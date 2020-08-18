@@ -386,6 +386,7 @@ lazy val bench = http4sProject("bench")
     description := "Benchmarks for http4s",
     libraryDependencies += circeParser,
     libraryDependencies += "org.tpolecat" %% "atto-core"    % "0.7.0",
+    libraryDependencies += "org.tpolecat" %% "a22o-core"    % "0.0.0+15-d927149f-SNAPSHOTsb",
     libraryDependencies += "com.lihaoyi" %% "fastparse" % "2.2.2",
     libraryDependencies += "org.scodec" %% "scodec-core" % "1.11.7",
 

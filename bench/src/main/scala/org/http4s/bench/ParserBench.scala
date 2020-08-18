@@ -32,6 +32,56 @@ object JValue {
   def jObject(values: List[(String, JValue)]): JValue = JObject(values)
 }
 
+object a22obench {
+  import a22o._, a22o.Parser._
+  import JValue._
+
+  def stringChars(c: Char) = c != '\"' && c != '\\'
+
+  val space         = stringOf(" \r\n").void
+  val digits        = stringOf1("0123456789").void
+  val exponent      = (charIn("eE") ~ charIn("+-").orNot ~ digits).void
+  val fractional    = ('.' ~ digits).void
+  val integral      = ('0' | charIn("123456789")).void ~> digits.fold(())(_ => ())
+
+  val number        : Parser[JValue] =
+    (charIn("+-").void.fold(())(_ => ()) ~ integral ~ fractional.fold(())(_ => ()) ~ exponent.fold(())(_ => ())).inputText.map(
+    x => jNumber(x.toDouble)
+  )
+
+  val `null`        : Parser[JValue] = "null".as(jNull)
+  val `false`       : Parser[JValue] = "false".as(jBoolean(false))
+  val `true`        : Parser[JValue] = "true".as(jBoolean(true))
+
+  val hexDigit      = charIn("0123456789abcdefABCDEF")
+  val unicodeEscape = ('u' ~ hexDigit ~ hexDigit ~ hexDigit ~ hexDigit).void
+  val escape        = ('\\' ~ (charIn("\"/\\bfnrt") | unicodeEscape).void).void
+
+  val strChars = takeWhile1(stringChars)
+  val string: Parser[JValue] =
+    (space ~ '"' ~ (strChars | escape).void.many.inputText ~ '"').mapN((_, _, s, _) => jString(s))
+
+  val array: Parser[JValue] = '[' ~> jsonExpr.many.sepBy(','.token).to(List).map(jArray) <~ ']'
+    // P( "[" ~/ jsonExpr.rep(sep=","./) ~ space ~ "]").map(Js.Arr(_:_*))
+
+  val pair = (string.map(_.toString) ~ ':'.token ~ jsonExpr).mapN((s, _, v) => (s, v))
+
+  val obj: Parser[JValue] = '{' ~> pair.many.sepBy(','.token).to(List).map(jObject) <~ '}'
+  //   P( "{" ~/ pair.rep(sep=","./) ~ space ~ "}").map(Js.Obj(_:_*))
+
+  val jsonExpr: Parser[JValue] =
+    space ~> (
+      obj |
+      array |
+      string |
+      `true` |
+      `false` |
+      `null` |
+      number
+    ).merge <~ space
+}
+
+
 object attobench extends Whitespace {
   import atto._, Atto._
   import JValue._
@@ -714,6 +764,11 @@ object Scodec {
 }
 
 class ParserBench {
+  @Benchmark
+  def testA22o: a22o.Result[JValue] = {
+    a22obench.jsonExpr.parse(JsonTest.text)
+  }
+
   @Benchmark
   def testAtto: atto.ParseResult[JValue] = {
     import atto._, Atto._
