@@ -25,18 +25,20 @@ import fs2._
 import fs2.Stream._
 import fs2.concurrent.Queue
 import java.nio.ByteBuffer
-import org.eclipse.jetty.client.api.{Result, Response => JettyResponse}
+import java.util.function.LongConsumer
+import org.eclipse.jetty.client.api.{Response => JettyResponse}
 import org.eclipse.jetty.http.{HttpFields, HttpVersion => JHttpVersion}
 import org.eclipse.jetty.util.{Callback => JettyCallback}
 import org.http4s.client.jetty.ResponseListener.Item
-import org.http4s.internal.{invokeCallback, loggingAsyncCallback}
+import org.http4s.internal.loggingAsyncCallback
 import org.http4s.internal.CollectionCompat.CollectionConverters._
 import org.log4s.getLogger
 
 private[jetty] final case class ResponseListener[F[_]](
     queue: Queue[F, Item],
     cb: Callback[Resource[F, Response[F]]])(implicit F: ConcurrentEffect[F])
-    extends JettyResponse.Listener.Adapter {
+    extends JettyResponse.DemandedContentListener
+    with JettyResponse.Listener {
   import ResponseListener.logger
 
   /* Needed to properly propagate client errors */
@@ -62,8 +64,7 @@ private[jetty] final case class ResponseListener[F[_]](
         ))
       }
       .leftMap { t => abort(t, response); t }
-
-    invokeCallback(logger)(cb(r))
+    cb(r)
   }
 
   private def getHttpVersion(version: JHttpVersion): HttpVersion =
@@ -79,28 +80,28 @@ private[jetty] final case class ResponseListener[F[_]](
 
   override def onContent(
       response: JettyResponse,
+      demand: LongConsumer,
       content: ByteBuffer,
       callback: JettyCallback): Unit = {
     val copy = ByteBuffer.allocate(content.remaining())
     copy.put(content).flip()
     enqueue(Item.Buf(copy)) {
-      case Right(_) => IO(callback.succeeded())
+      case Right(_) =>
+        IO(callback.succeeded()) *>
+          IO(demand.accept(1))
       case Left(e) =>
-        IO(logger.error(e)("Error in asynchronous callback")) >> IO(callback.failed(e))
+        IO(logger.error(e)("Error in onContent callback")) *>
+          IO(callback.failed(e))
     }
   }
 
   override def onFailure(response: JettyResponse, failure: Throwable): Unit =
     if (responseSent) enqueue(Item.Raise(failure))(_ => IO.unit)
-    else invokeCallback(logger)(cb(Left(failure)))
+    else cb(Left(failure))
 
   // the entire response has been received
   override def onSuccess(response: JettyResponse): Unit =
     closeStream()
-
-  // the entire req/resp conversation has completed
-  // (the request might complete after the response has been entirely received)
-  override def onComplete(result: Result): Unit = ()
 
   private def abort(t: Throwable, response: JettyResponse): Unit =
     if (!response.abort(t)) // this also aborts the request
