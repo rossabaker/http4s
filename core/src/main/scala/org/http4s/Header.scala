@@ -106,6 +106,9 @@ object Header {
     type Value
     def values: NonEmptyList[Value]
   }
+  object Recurring {
+    type Aux[A] = Recurring { type Value = A }
+  }
 
   /** Simple helper trait that provides a default way of rendering the value */
   trait RecurringRenderable extends Recurring {

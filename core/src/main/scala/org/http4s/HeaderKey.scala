@@ -53,21 +53,22 @@ object HeaderKey {
     */
   trait Recurring extends Extractable {
     type HeaderT <: Header.Recurring
+    type ValueT = RecurringV[HeaderT]
     type GetT = Option[HeaderT]
 
-    def apply(values: NonEmptyList[HeaderT#Value]): HeaderT
+    def apply(values: NonEmptyList[ValueT]): HeaderT
 
-    def apply(first: HeaderT#Value, more: HeaderT#Value*): HeaderT =
+    def apply(first: ValueT, more: ValueT*): HeaderT =
       apply(NonEmptyList(first, more.toList))
 
     def from(headers: Headers): Option[HeaderT] = {
       @tailrec def loop(
           hs: Headers,
-          acc: NonEmptyList[HeaderT#Value]): NonEmptyList[HeaderT#Value] =
+          acc: NonEmptyList[ValueT]): NonEmptyList[ValueT] =
         if (hs.nonEmpty)
           matchHeader(hs.toList.head) match {
             case Some(header) =>
-              loop(Headers(hs.toList.tail), acc.concatNel(header.values.widen[HeaderT#Value]))
+              loop(Headers(hs.toList.tail), acc.concatNel(header.values[ValueT]))
             case None =>
               loop(Headers(hs.toList.tail), acc)
           }
@@ -76,12 +77,16 @@ object HeaderKey {
         if (hs.nonEmpty)
           matchHeader(hs.toList.head) match {
             case Some(header) =>
-              Some(apply(loop(Headers(hs.toList.tail), header.values.widen[HeaderT#Value])))
+              Some(apply(loop(Headers(hs.toList.tail), header.values.widen[ValueT])))
             case None => start(Headers(hs.toList.tail))
           }
         else None
       start(headers)
     }
+  }
+
+  type RecurringV[R <: Header.Recurring.Aux[_]] = R match {
+    case Header.Recurring.Aux[v] => v
   }
 
   private[http4s] abstract class Internal[T <: Header: ClassTag] extends HeaderKey {
